@@ -51,6 +51,15 @@ class AbstractProtocol (ABC):
         idx = self.get_party_roles().index(role)
         self.parties[idx] = party
 
+
+    """
+    A simple helper method which checks wether the provided party should perform its computations on this machine.
+    This is the case if there is no runnning party set in which case all parties are simulated on this machine.
+    Or if the given party is the running party
+    """
+    def is_local_party(self, party: ProtocolParty) -> bool:
+        return self.running_party == None or self.running_party == party.get_party_name()
+
     """
     Arguments:
     party: party who should run the computation
@@ -59,12 +68,12 @@ class AbstractProtocol (ABC):
     computation: A lambda function/function pointer which takes in the input_vars and computes the computed_vars
     description: A string describing what the computation does. This is used for protocol debugging and visualisation.
     """
-    def run_computation(self, party: ProtocolParty, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
-        if (self.running_party != None and party.get_party_name() != self.running_party):
+    def compute(self, computing_party: ProtocolParty, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
+        if (not self.is_local_party(computing_party)):
             # We don't run computations for parties that aren't the running party when a running_party is specified (when running in distributed manner).
             return
         
-        party.run_computation(computed_vars, input_vars, computation, description)
+        computing_party.run_computation(computed_vars, input_vars, computation, description)
     
     """
     Declares the start of a new round/step of the protocol.
@@ -88,8 +97,12 @@ class AbstractProtocol (ABC):
 
         # TODO change the send and receive methods for protocol parties to send multiple variables as one message.
         for var in variables:
-            sending_party.send_variable(receiving_party, var)
-            receiving_party.receive_variable(sending_party, var)
+            # only call the send and receive methods on the parties if that party is running localy.
+            if (self.is_local_party(sending_party)):
+                sending_party.send_variable(receiving_party, var)
+            
+            if (self.is_local_party(receiving_party)):
+                receiving_party.receive_variable(sending_party, var)
 
     """
     A protocol must implement the __call__ method in which the protocol is run.
