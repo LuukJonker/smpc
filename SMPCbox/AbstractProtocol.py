@@ -65,8 +65,12 @@ class AbstractProtocol (ABC):
         
         party.run_computation(computed_vars, input_vars, computation, description)
     
+    """
+    Declares the start of a new round/step of the protocol.
+    Any calls to run_computation after a call to this method will be ran as part of this step.
+    """
     def add_protocol_step(self, step_name: str = None):
-        for p in self.protocol_parties:
+        for p in self.parties:
             p.add_protocol_step(step_name)
 
     """
