@@ -4,8 +4,9 @@ from SMPCbox.ProtocolParty import ProtocolParty
 
 class AbstractProtocol (ABC):
     # Mandatory class variables
-    parties: list[ProtocolParty]
+    parties: list[ProtocolParty] = []
     protocol_name: str = ""
+
 
     def __init__(self):
         self.running_party = None
@@ -72,6 +73,23 @@ class AbstractProtocol (ABC):
     def add_protocol_step(self, step_name: str = None):
         for p in self.parties:
             p.add_protocol_step(step_name)
+    
+    """
+    Given the party which is sending the variables and the party receiving the variables this
+    method handles the sending and receiving for both of the parties.
+    After a call to this method the send variables can be used in computations of the receiving_party
+
+    Note that the variables argument can be both a single string and a list of strings in case more than one
+    variable is send
+    """
+    def send_variables(self, sending_party: ProtocolParty, receiving_party: ProtocolParty, variables: Union[str, list[str]]):
+        # in the case that the variables is just a single string convert it to a list
+        variables = [variables] if type(variables) == str else variables
+
+        # TODO change the send and receive methods for protocol parties to send multiple variables as one message.
+        for var in variables:
+            sending_party.send_variable(receiving_party, var)
+            receiving_party.receive_variable(sending_party, var)
 
     """
     A protocol must implement the __call__ method in which the protocol is run.
