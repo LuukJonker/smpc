@@ -93,7 +93,6 @@ class ProtocolParty ():
 
     def receive_variables (self, sender: Type['ProtocolParty'], variable_names: list[str]):
         variable_names = [self.get_namespace() + name for name in variable_names]
-        
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender

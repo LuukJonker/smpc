@@ -126,7 +126,7 @@ class SMPCSocket ():
     This function returns the variable received from the sender with the specified variable name.
     If this variable is not received from the sender then an Exception is raised.
     """
-    def receive_variable(self, sender: Type['ProtocolParty'], variable_name: str, timeout: float = 5) -> Any:
+    def receive_variable(self, sender: Type['Protocolc80Party'], variable_name: str, timeout: float = 10) -> Any:
         if self.ip:
             # we keep checking untill the listening socket has put the message into the queue
             start_time = time.time()

@@ -313,7 +313,7 @@ class AbstractProtocol (ABC):
             # find what role the running_party has and set them as the running party in the subroutine protocol
             for role, party in role_assignments.items():
                 if self.running_party == party.name:
-                    protocol.set_running_party(role, party)
+                    p.set_running_party(role, party)
         
         # run the protocol
         p()
