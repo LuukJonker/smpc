@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df = pd.read_csv("sumTest.csv")
+df = pd.read_csv("simulatedSumTest.csv")
 
 plt.figure(figsize=(10, 6))
 
