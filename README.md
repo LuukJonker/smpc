@@ -1,1 +1,3 @@
-# SPMC
+# SMPC
+
+## Installation guide
