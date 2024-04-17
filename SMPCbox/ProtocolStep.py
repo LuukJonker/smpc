@@ -5,6 +5,7 @@ class ProtocolStep():
     def __init__(self, name: str):
         self.__step_name = name
         self.__step_description = []
+        self.__computations: list[Type[ProtocolComputation]] = []
     
     def run_computation (self, computation: Type[ProtocolComputation], local_variables: dict[str, Any], computed_variable_name: str = None):
         res = computation.execute_computation(local_variables)
