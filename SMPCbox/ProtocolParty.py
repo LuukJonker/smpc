@@ -3,7 +3,7 @@ from SMPCbox.SMPCSocket import SMPCSocket
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None):
-        self.__socket = SMPCSocket(address)
+        self.__socket = SMPCSocket(name, address, is_listening_socket=True)
         self.__name = name
         self.__local_variables: dict[str, Any] = {}
     
@@ -29,3 +29,7 @@ class ProtocolParty ():
     # 
     def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
         self.__local_variables[variable_name] = self.__socket.receive_variable(sender, variable_name)
+
+    """ should be called to make sure the sockets exit nicely """
+    def exit_protocol(self):
+        self.__socket.close()
