@@ -1,7 +1,5 @@
-from SMPCbox.ProtocolComputation import ProtocolComputation
 from SMPCbox.ProtocolStep import ProtocolStep
 from SMPCbox.ProtocolParty import ProtocolParty
-import time
 
 if __name__ == "__main__":
     allice = ProtocolParty("Allice", address="127.0.0.1:3922")
