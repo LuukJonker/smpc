@@ -29,21 +29,27 @@ class ProtocolParty ():
         # get the input values
         input_vals = [self.get_variable(var) for var in input_vars]
 
+        if (len(self.__steps) == 0): raise Exception ("No protocol step defined before adding a computation. Use the add_protocol_step method before adding computations.")
+
         self.__steps[-1].run_computation(computed_vars, input_vals, computation, self.__local_variables, description)
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[variable_name] = value
-    
-    # : Type[ProtocolParty]
+
     def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str):
         if not variable_name in self.__local_variables.keys():
             raise Exception(f"Trying to send unknown local variable \"{variable_name}\" from the party \"{self.get_party_name()}\"")
             
         self.__socket.send_variable(receiver, variable_name, self.__local_variables[variable_name])
 
-    # 
     def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
         self.__local_variables[variable_name] = self.__socket.receive_variable(sender, variable_name)
+    
+    def add_protocol_step(self, step_name: str = None):
+        if step_name == None:
+            step_name = f"step {len(self.__protocol_steps) + 1}"
+        
+        self.__steps.append(ProtocolStep(step_name))
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):
