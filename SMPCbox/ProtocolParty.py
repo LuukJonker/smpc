@@ -1,11 +1,13 @@
-from typing import Type, Any
+from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
+from SMPCbox.ProtocolStep import ProtocolStep
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None):
         self.__socket = SMPCSocket(name, address, is_listening_socket=True)
         self.__name = name
         self.__local_variables: dict[str, Any] = {}
+        self.__steps: list[ProtocolStep] = []
     
     def get_socket (self) -> Type[SMPCSocket]:
         return self.__socket
@@ -15,6 +17,19 @@ class ProtocolParty ():
     
     def print_local_variables(self):
         print(self.__local_variables)
+    
+    def get_variable(self, variable_name: str):
+        return self.__local_variables[variable_name]
+
+    def run_computation(self, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
+        # make sure the input vars and computed_vars are lists
+        input_vars = [input_vars] if type(input_vars) == str else input_vars
+        computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
+
+        # get the input values
+        input_vals = [self.get_variable(var) for var in input_vars]
+
+        self.__steps[-1].run_computation(computed_vars, input_vals, computation, self.__local_variables, description)
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[variable_name] = value
