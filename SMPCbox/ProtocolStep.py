@@ -1,18 +1,18 @@
-from SMPCbox.ProtocolComputation import ProtocolComputation
-from typing import Any, Type
+from typing import Any, Union, Callable
 
 class ProtocolStep():
     def __init__(self, name: str):
         self.__step_name = name
         self.__step_description = []
         
-    def run_computation (self, computation: Type[ProtocolComputation], local_variables: dict[str, Any], computed_variable_name: str = None):
-        res = computation.execute_computation(local_variables)
-        self.__step_description.append(computation.get_computation_description())
+    def run_computation (self, computed_vars: list[str],  input_values: list[Any], computation: Callable, local_variables: dict[str, Any], description: str):
+        
+        # get the local variables
+        res = computation(*input_values)
 
-        if (computed_variable_name != None):
-            local_variables[computed_variable_name] = res
-            self.__step_description[-1] = f"{computed_variable_name} = {self.__step_description[-1]}"
+        self.__step_description[-1] = f"{', '.join([var for var in computed_vars])} = {description}"
+        for i, var in enumerate(computed_vars):
+            local_variables[var] = res[i]
 
     """
     get_step_description() -> (str, list[str])
