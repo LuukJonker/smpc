@@ -124,6 +124,18 @@ class AbstractProtocol (ABC):
         Note that the keys of the dictionary are roles as specified by the get_party_roles method
         """
         pass
+
+
+    def announce_globals(self, anouncing_party: ProtocolParty, variables: Union[str, list[str]]):
+        """
+        Given a party who has all of the provided variables localy this method announces the globals to all the parties participating in the protocol.
+        After a call to this method the variables with the provided names can be used as local variables in all party.
+        """
+        for receiver in self.parties.values:
+            if receiver == anouncing_party:
+                continue
+            self.send_variables(anouncing_party, receiver, variables)
+
     
     def run_subroutine_protocol(self, protocol: Type['AbstractProtocol'], role_assignments: dict[str, ProtocolParty], inputs: dict[str, dict[str, Any]]):
         """
