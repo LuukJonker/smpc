@@ -27,7 +27,6 @@ class AbstractProtocol (ABC):
         """
         pass
 
-
     def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
         """
         Sets the ProtocolParty classes, the dictionary should contain a mapping from every role specified by get_party_roles to a
@@ -36,11 +35,11 @@ class AbstractProtocol (ABC):
         The use of this method is not mandatory, if the parties are never set then the protocol class automaticaly creates ProtocolParty
         instances with the names of the roles in the protocol.
     
-        Note that in the case that the protocol is run distributedly where a single ProtocolParty needs to be specified the user should instead
-        use the method set_running_party.
+        Note that in the case that the protocol is run distributedly the party running localy should also be specified with the
+        set_running_party method.
         """
 
-        if set(role_assignments.keys) != set(self.get_party_roles()):
+        if set(role_assignments.keys()) != set(self.get_party_roles()):
             raise Exception("A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties.")
         self.parties = role_assignments
 
