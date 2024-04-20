@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Union, Callable, Any
+from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty
 
 class AbstractProtocol (ABC):
     # Mandatory class variables
-    parties: list[ProtocolParty] = []
     protocol_name: str = ""
+    # a mapping from each role in the protocol to a ProtocolParty instance
+    parties: dict[str, ProtocolParty] = {}
 
 
     def __init__(self):
@@ -13,9 +14,8 @@ class AbstractProtocol (ABC):
 
         # instantiate all the ProtocolParty classes with the default name of the role.
         # These might be overwritten if the user sets them later.
-        self.parties = []
         for role in self.get_party_roles():
-            self.parties.append(ProtocolParty(role))
+            self.parties[role] = ProtocolParty(role)
     
     """
     Returns an ordered list of the roles of each party
@@ -29,15 +29,19 @@ class AbstractProtocol (ABC):
         pass
 
     """
-    Sets the ProtocolParty classes, the role of each party in the list should be given according
-    to the order defined in the get_party_roles method.
-    In the case that a user only wants to set the ProtocolParty instance for the running party
-    as would be the case for most users when running distributedly then the set_running_party method should be used
+    Sets the ProtocolParty classes, the dictionary should contain a mapping from every role specified by get_party_roles to a
+    ProtocolParty instance.
+    
+    The use of this method is not mandatory, if the parties are never set then the protocol class automaticaly creates ProtocolParty
+    instances with the names of the roles in the protocol.
+
+    Note that in the case that the protocol is run distributedly where a single ProtocolParty needs to be specified the user should instead
+    use the method set_running_party.
     """
-    def set_protocol_parties(self, parties: list[ProtocolParty]):
-        if (len(parties) != len(self.get_party_roles())):
-            raise Exception("The number of ProtocolParty instances provided to set_protocol_parties must be equal to the number of roles specified by get_party_roles")
-        self.parties = parties
+    def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
+        if set(role_assignments.keys) != set(self.get_party_roles()):
+            raise Exception("A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties.")
+        self.parties = role_assignments
 
     """
     When running distributedly the party running localy should be set using this function.
@@ -48,8 +52,7 @@ class AbstractProtocol (ABC):
         if not role in self.get_party_roles():
             raise Exception(f"The role \"{role}\" does not exist in the protocol\"{self.protocol_name}\"")
         self.running_party = party.get_party_name()
-        idx = self.get_party_roles().index(role)
-        self.parties[idx] = party
+        self.parties[role] = party
 
 
     """
@@ -80,8 +83,8 @@ class AbstractProtocol (ABC):
     Any calls to run_computation after a call to this method will be ran as part of this step.
     """
     def add_protocol_step(self, step_name: str = None):
-        for p in self.parties:
-            p.add_protocol_step(step_name)
+        for protocolParty in self.parties.values():
+            protocolParty.add_protocol_step(step_name)
     
     """
     Given the party which is sending the variables and the party receiving the variables this
@@ -108,33 +111,67 @@ class AbstractProtocol (ABC):
     A protocol must implement the __call__ method in which the protocol is run.
     """
     @abstractmethod
-    def __call__(self, running_party: str = None):
+    def __call__(self):
         pass
 
     """
     A protocol must specify what the expected inputs for each party should be.
+    Note that the keys of the dictionary are roles as specified by the get_party_roles method
     """
     @abstractmethod
-    def get_expected_input(self) -> list[dict[str, str]]:
+    def get_expected_input(self) -> dict[str, list[str]]:
         pass
+    
+    """
+    Runs the provided protocol as part of the current protocol. Appart from the protocol class (not instance), there are two required arguments:
+    role_assignments: A dictionary which should map every role of the protocol being run to an existing ProtocolParty.
+                      The roles can be retreived with the get_party_roles method of the protocol class.
+    inputs: This maps the inputs of every role in the protocol being run. The dictionary should contain all the inputs as specified by the get_expected_input method
+        
+    Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
+    """
+    def run_subroutine_protocol(self, protocol: Type['AbstractProtocol'], role_assignments: dict[str, ProtocolParty], inputs: dict[str, dict[str, Any]]):
+        # comunicate to the participating parties that they are entering a subroutine
+        for party in role_assignments.values():
+            party.start_subroutine_protocol(protocol.protocol_name)
 
-    """
-    Gets the party with the specified role.
-    """
-    def get_party_with_role(self, role: str) -> ProtocolParty:
-        if not role in self.get_party_roles():
-            raise Exception(f"The role \"{role}\" does not exist in the protocol\"{self.protocol_name}\"")
-        idx = self.get_party_roles().index(role)
-        return self.parties[idx]
+        p = protocol()
+        p.set_protocol_parties(role_assignments)
+
+        # Comunicate to the protocol wether a certain party is running the protocol localy
+        if self.running_party != None:
+            # find what role the running_party has and set them as the running party in the subroutine protocol
+            for role, party in role_assignments.items():
+                if self.running_party == party.get_party_name():
+                    protocol.set_running_party(role, party)
+        
+        # set the inputs
+        p.set_input(inputs)
+        # run the protocol
+        p()
+
+        # Comunicate the end of the subroutine to the parties involved
+        for party in role_assignments.values():
+            party.end_subroutine_protocol()
 
     """
     Sets the inputs for the protocols (all inputs specified by get_expected_input) should be given
     If set_running_party has been called only the input for that party needs to be given
     If the protocol is not run distributed then the inputs for all the parties should be provided.
+    
+    This method also checks wether the provided input is correct according to the get_expected_input method
     """
     def set_input(self, inputs: dict[str, dict[str, Any]]):
+        expected_vars = self.get_expected_input()
         for role in inputs.keys():
-            party = self.get_party_with_role(role)
-
+            # check wether the inputs are provided correctly for each role
+            if set(expected_vars[role]) != set(inputs[role].keys):
+                expected_set = set(expected_vars[role])
+                given_set = set(inputs[role].keys())
+                raise Exception(f"""The inputs for the role \"{role}\" in the protocol \"{self.protocol_name}\" are incorrect.\n
+                                    Missing variables {expected_set.difference(given_set)}\n
+                                    Provided non existent input variables {given_set.difference(expected_set)}""")
+            
+            # Set the inputs
             for var in inputs[role].keys():
-                party.set_local_variable(var, inputs[role][var])
+                self.parties[role].set_local_variable(var, inputs[role][var])
