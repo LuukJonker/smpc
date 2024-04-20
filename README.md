@@ -1,11 +1,12 @@
 # SMPC
 
+
 ## Installation guide
 
 ### Clone the repository
 
 ```bash
-git clone
+git clone https://github.com/LuukJonker/smpc.git
 ```
 
 ### Install Python
