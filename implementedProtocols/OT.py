@@ -73,3 +73,6 @@ if __name__ == "__main__":
     ot_protocol = OT()
     ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
     ot_protocol()
+    for step in ot_protocol.protocol_steps:
+        for opp in step.step_description:
+            print(opp.__str__())
