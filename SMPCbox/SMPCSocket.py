@@ -35,6 +35,7 @@ class SMPCSocket ():
                 # create the listening socket which will accept incomming connections and also read messages
                 self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                print("LISTEN ON", self.ip, self.port)
                 self.listening_socket.bind((self.ip, self.port))
                 # TODO remove magic number for backlog in listen
                 self.listening_socket.listen(5)
@@ -48,7 +49,7 @@ class SMPCSocket ():
             # TODO put the timeout as a setting (timeout needed so the socket stops if self.smpc_socket_in_use if false)
             readable_sockets, _, _ = select.select(self.client_sockets + [self.listening_socket], [], [], 0.1)
             for socket in readable_sockets:
-                if socket == self.listening_socket and sqelf.smpc_socket_in_use:
+                if socket == self.listening_socket and self.smpc_socket_in_use:
                     client_socket, client_address = self.listening_socket.accept()
                     self.client_sockets.append(client_socket)
                 else:
@@ -127,8 +128,8 @@ class SMPCSocket ():
                     break
                 time.sleep(0.1)
     
-            self.close()
             raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.get_party_name()}\"")
+            self.close()
         else:
             value = self.get_variable_from_buffer(sender.get_party_name(), variable_name)
             return value
@@ -147,6 +148,7 @@ class SMPCSocket ():
                 # no connection so create a new connection
                 new_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 new_client.connect((dest_ip, dest_port))
+                print("CONNECTED")
                 self.client_sockets.append(new_client)
                 existing_socket = new_client
             
