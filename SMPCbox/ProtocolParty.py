@@ -2,14 +2,14 @@ from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
 
 class ProtocolParty ():
-    def __init__(self, name: str, address: str = None):
+    def __init__(self, name: str, address: str = None, is_listening_socket=True):
         """
         Instantiates a ProtocolParty. ProtocolParty instances are used within protocols, protocols themselfs
         instantiate ProtocolParty instances by default though when a user wants to assign a specific name
         to a certain party or wants to provide an address (ip:port) a party instance can also be provided
         to a protocol by using the set_protocol_parties or set_running_party methods of the protocol class.
         """
-        self.__socket = SMPCSocket(name, address, is_listening_socket=True)
+        self.__socket = SMPCSocket(name, address, is_listening_socket=is_listening_socket)
         self.__name = name
         self.__local_variables: dict[str, Any] = {}
 

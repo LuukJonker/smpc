@@ -2,11 +2,11 @@
 # folder. Should remove once it is pip installable
 import sys
 sys.path.append('../')
-
+import time
 from SMPCbox import AbstractProtocol
+from SMPCbox.ProtocolParty import ProtocolParty
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
 import os
 
 
@@ -71,7 +71,13 @@ class OT(AbstractProtocol):
 
 if __name__ == "__main__":
     ot_protocol = OT()
-    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+
+    sender = ProtocolParty("Bas", address="127.0.0.1:4832")
+    receiver = ProtocolParty("Naz-Pari", address="127.0.0.1:4833", is_listening_socket=False)
+    time.sleep(5)
+    ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
+    ot_protocol.set_running_party("Sender", sender)
+    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}})
     ot_protocol()
     for step in ot_protocol.protocol_steps:
         for opp in step.step_description:
