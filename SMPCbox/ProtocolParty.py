@@ -1,6 +1,5 @@
 from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
-from SMPCbox.ProtocolStep import ProtocolStep
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None):
@@ -13,7 +12,6 @@ class ProtocolParty ():
         self.__socket = SMPCSocket(name, address, is_listening_socket=True)
         self.__name = name
         self.__local_variables: dict[str, Any] = {}
-        self.__steps: list[ProtocolStep] = []
 
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
@@ -54,11 +52,24 @@ class ProtocolParty ():
         # get the input values
         input_vals = [self.get_variable(var) for var in input_vars]
 
-        if (len(self.__steps) == 0): raise Exception ("No protocol step defined before adding a computation. Use the add_protocol_step method before adding computations.")
-
         # add the namespace to the computed_var names
         computed_vars = [self.get_namespace() + name for name in computed_vars]
-        self.__steps[-1].run_computation(computed_vars, input_vals, computation, self.__local_variables, description)
+
+        # get the local variables
+        res = computation(*input_vals)
+
+        # assign the output if there is just a single output variable
+        if len(computed_vars) == 1:
+            self.__local_variables[computed_vars[0]] = res
+            return
+        
+        # check if enough values are returned 
+        if len(res) != len(computed_vars):
+            raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
+        
+        # assign the values
+        for i, var in enumerate(computed_vars):
+            self.__local_variables[var] = res[i]
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
@@ -73,12 +84,6 @@ class ProtocolParty ():
     def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
         real_var_name = self.get_namespace() + variable_name
         self.__local_variables[real_var_name] = self.__socket.receive_variable(sender, real_var_name)
-    
-    def add_protocol_step(self, step_name: str = None):
-        if step_name == None:
-            step_name = f"step {len(self.__protocol_steps) + 1}"
-        
-        self.__steps.append(ProtocolStep(step_name))
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):
