@@ -10,7 +10,14 @@ class ProtocolStep():
         # get the local variables
         res = computation(*input_values)
 
-        self.__step_description[-1] = f"{', '.join([var for var in computed_vars])} = {description}"
+        if len(computed_vars) == 1:
+            local_variables[computed_vars[0]] = res
+            return
+        
+        if len(res) != len(computed_vars):
+            raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
+
+        self.__step_description.append(f"{', '.join([var for var in computed_vars])} = {description}")
         for i, var in enumerate(computed_vars):
             local_variables[var] = res[i]
 

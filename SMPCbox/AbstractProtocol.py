@@ -180,7 +180,7 @@ class AbstractProtocol (ABC):
         expected_vars = self.get_expected_input()
         for role in inputs.keys():
             # check wether the inputs are provided correctly for each role
-            if set(expected_vars[role]) != set(inputs[role].keys):
+            if set(expected_vars[role]) != set(inputs[role].keys()):
                 expected_set = set(expected_vars[role])
                 given_set = set(inputs[role].keys())
                 raise Exception(f"""The inputs for the role \"{role}\" in the protocol \"{self.protocol_name}\" are incorrect.\n
