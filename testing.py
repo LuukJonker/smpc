@@ -1,4 +1,3 @@
-from SMPCbox.ProtocolStep import ProtocolStep
 from SMPCbox.ProtocolParty import ProtocolParty
 
 if __name__ == "__main__":

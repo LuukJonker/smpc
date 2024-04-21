@@ -1,31 +1,23 @@
-from typing import Any, Union, Callable
+from SMPCbox.ProtocolOpps import ProtocolOpperation
+from abc import ABC
+from typing import Type
 
-class ProtocolStep():
+class ProtocolStep(ABC):
+    """
+    This class is used to 'store' the opperations performed within a step.
+    The class simpily stores the name of the step and a list of ProtocolOpperations
+    """
     def __init__(self, name: str):
-        self.__step_name = name
-        self.__step_description = []
+        self.step_name = name
+        self.step_description: list[ProtocolOpperation] = []
         
-    def run_computation (self, computed_vars: list[str],  input_values: list[Any], computation: Callable, local_variables: dict[str, Any], description: str):
-        
-        # get the local variables
-        res = computation(*input_values)
+    def add_opperation (self, opp: ProtocolOpperation):
+        self.step_description.append(opp)
 
-        if len(computed_vars) == 1:
-            local_variables[computed_vars[0]] = res
-            return
-        
-        if len(res) != len(computed_vars):
-            raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
-
-        self.__step_description.append(f"{', '.join([var for var in computed_vars])} = {description}")
-        for i, var in enumerate(computed_vars):
-            local_variables[var] = res[i]
-
+class ProtocolSubroutine(ProtocolStep):
     """
-    get_step_description() -> (str, list[str])
-
-    Returns a tuple containing the name of the step and the description of all the computations that have 
-    been run using the run_computation function.
+    A special type of ProtocolStep which is used when a protocol is used as a subroutine
     """
-    def get_step_description(self):
-        return (self.__step_name, self.__step_description)
+    def __init__(self, subroutine_protocol: Type['AbstractProtocol']):
+        super().__init__(subroutine_protocol.protocol_name)
+        self.step_description: list[ProtocolStep] = subroutine_protocol.protocol_steps
