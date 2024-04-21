@@ -64,10 +64,11 @@ class ProtocolParty ():
         self.__local_variables[self.get_namespace() + variable_name] = value
 
     def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str):
-        if not variable_name in self.__local_variables.keys():
-            raise Exception(f"Trying to send unknown local variable \"{variable_name}\" from the party \"{self.get_party_name()}\"")
-            
-        self.__socket.send_variable(receiver, variable_name, self.get_variable(variable_name))
+        real_var_name = self.get_namespace() + variable_name
+        if not real_var_name in self.__local_variables.keys():
+            raise Exception(f"Trying to send unknown local variable \"{real_var_name}\" from the party \"{self.get_party_name()}\"")
+
+        self.__socket.send_variable(receiver, real_var_name, self.get_variable(variable_name))
 
     def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
         real_var_name = self.get_namespace() + variable_name

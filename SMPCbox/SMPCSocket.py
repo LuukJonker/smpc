@@ -23,7 +23,7 @@ class SMPCSocket ():
         self.name = party_name
         # a buffer storing all received variables which have not been requested by the parrent class via
         # the receive variable function
-        self.received_variables: dict[Type['SMPCSocket'], dict[str, Any]] = {}
+        self.received_variables: dict[str, dict[str, Any]] = {}
         self.listening_socket = None
 
         self.smpc_socket_in_use = True
@@ -114,21 +114,25 @@ class SMPCSocket ():
     If this variable is not received from the sender then an Exception is raised.
     """
     def receive_variable(self, sender: Type['ProtocolParty'], variable_name: str, timeout: float = 2) -> Any:
-        # we keep checking untill the listening socket has put the message into the queue
-        start_time = time.time()
-        while (time.time() - start_time < timeout):
+        if self.ip:
+            # we keep checking untill the listening socket has put the message into the queue
+            start_time = time.time()
+            while (time.time() - start_time < timeout):
+                value = self.get_variable_from_buffer(sender.get_party_name(), variable_name)
+                if value != None:
+                    return value
+                
+                if self.ip == None:
+                    # no need to wait for network delay since were simulating it all
+                    break
+                time.sleep(0.1)
+    
+            self.close()
+            raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.get_party_name()}\"")
+        else:
             value = self.get_variable_from_buffer(sender.get_party_name(), variable_name)
-            if value != None:
-                return value
-            
-            if self.ip == None:
-                # no need to wait for network delay since were simulating it all
-                break
-            time.sleep(0.1)
+            return value
 
-        self.close()
-        raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.get_party_name()}\"")
-            
     """
     This function sends the variable to this socket. 
     """
@@ -151,4 +155,4 @@ class SMPCSocket ():
             existing_socket.sendall(msg.encode())
         else: 
             # we simulate the socket by putting the variable in the buffer of received variables
-            receiver_socket.put_variable_in_buffer(self, variable_name, value)
+            receiver_socket.put_variable_in_buffer(self.name, variable_name, value)
