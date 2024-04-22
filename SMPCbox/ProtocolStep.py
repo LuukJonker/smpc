@@ -13,6 +13,12 @@ class ProtocolStep(ABC):
         
     def add_opperation (self, opp: ProtocolOpperation):
         self.step_description.append(opp)
+    
+    def remove_last_opperation (self):
+        """
+        Can be used to remove opperations added by methods which are used as helpers for a more complex opperation
+        """
+        self.step_description.pop()
 
 class ProtocolSubroutine(ProtocolStep):
     """
