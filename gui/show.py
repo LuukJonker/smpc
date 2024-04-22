@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets
 import random
-import gui
+import overview
 
 
 def generate_shares(inputs, randoms=None):
@@ -47,7 +47,7 @@ def reconstruct_secret(inputs):
     return sum(inputs)
 
 
-class OverviewView(gui.Ui_MainWindow):
+class OverviewView(overview.Ui_MainWindow):
     def __init__(self) -> None:
         super().__init__()
 
