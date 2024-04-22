@@ -106,6 +106,12 @@ class AbstractProtocol (ABC):
         # Make sure to prefix the namespace to the computed vars in the visualisation
         computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
         computed_var_names = [computing_party.get_namespace() + var for var in computed_vars]
+
+        # Get the computed values
+        computed_var_values = {}
+        for name in computed_var_names:
+            computed_var_values[name] = computing_party.get_variable(name)
+
         # add the local computation
         self.protocol_steps[-1].add_opperation(LocalComputation(computing_party, computed_var_names, description))
 
@@ -135,17 +141,24 @@ class AbstractProtocol (ABC):
 
         # in the case that the variables is just a single string convert it to a list
         variables = [variables] if type(variables) == str else variables
+        variable_values = {}
 
         # TODO change the send and receive methods for protocol parties to send multiple variables as one message.
         for var in variables:
             # only call the send and receive methods on the parties if that party is running localy.
             if (self.is_local_party(sending_party)):
                 sending_party.send_variable(receiving_party, var)
+                variable_values[var] = sending_party.get_variable(var)
             
             if (self.is_local_party(receiving_party)):
                 receiving_party.receive_variable(sending_party, var)
+                if var not in variable_values.keys():
+                    # TODO set to none when the get_variable becomes blocking.
+                    # TODO add a ReceivedVar to the protocolOpps
+                    variable_values[var] = receiving_party.get_variable(var)
         
-        self.protocol_steps[-1].add_opperation(SendVariables(sending_party, receiving_party, variables))
+        # add the description
+        self.protocol_steps[-1].add_opperation(SendVariables(sending_party, receiving_party, variable_values))
         
 
     @abstractmethod
@@ -179,6 +192,8 @@ class AbstractProtocol (ABC):
             if receiver == announcing_party:
                 continue
             self.send_variables(announcing_party, receiver, variables)
+            # Remove the SendVariables since it will be replaced by an AnnounceGlobals
+            self.protocol_steps[-1].remove_last_opperation()
 
         self.protocol_steps[-1].add_opperation(AnnounceGlobals(announcing_party, variables))
 

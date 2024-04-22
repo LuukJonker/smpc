@@ -6,6 +6,8 @@ All the opperations are inherited versions of the ProtocolOpperation class.
 from enum import Enum
 from abc import ABC
 from SMPCbox.ProtocolParty import ProtocolParty
+from typing import Any
+
 
 class OpperationType(Enum):
     LOCAL_COMPUTATION = 0
@@ -18,7 +20,7 @@ class ProtocolOpperation(ABC):
         self.party: str = performed_by.get_party_name()
 
 class LocalComputation(ProtocolOpperation):
-    def __init__(self, party: ProtocolParty, computed_variables: list[str], computation_description: str):
+    def __init__(self, party: ProtocolParty, computed_variables: dict[str, Any], computation_description: str):
         super().__init__(OpperationType.LOCAL_COMPUTATION, party)
         self.computed_variables = computed_variables
         self.description = computation_description
@@ -31,7 +33,7 @@ class LocalComputation(ProtocolOpperation):
         return f"{self.party}: {self.get_description()}"
 
 class SendVariables(ProtocolOpperation):
-    def __init__(self, sender: ProtocolParty, receiver: ProtocolParty, variables: list[str]):
+    def __init__(self, sender: ProtocolParty, receiver: ProtocolParty, variables: dict[str, Any]):
         super().__init__(OpperationType.SEND_VARIABLES, sender)
         self.sender = sender.get_party_name()
         self.receiver = receiver.get_party_name()
@@ -41,7 +43,7 @@ class SendVariables(ProtocolOpperation):
         return f"{self.party}: send {self.send_variables} to {self.receiver}"
     
 class AnnounceGlobals(ProtocolOpperation):
-    def __init__(self, announcer: ProtocolParty, variables: list[str]):
+    def __init__(self, announcer: ProtocolParty, variables: dict[str, Any]):
         super().__init__(OpperationType.ANNOUNCE_GLOBALS, announcer)
         self.announcer = announcer.get_party_name()
         self.announced_variables = variables
