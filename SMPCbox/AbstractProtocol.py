@@ -152,6 +152,10 @@ class AbstractProtocol (ABC):
             
             if (self.is_local_party(receiving_party)):
                 receiving_party.receive_variable(sending_party, var)
+                if var not in variable_values.keys():
+                    # TODO set to none when the get_variable becomes blocking.
+                    # TODO add a ReceivedVar to the protocolOpps
+                    variable_values[var] = receiving_party.get_variable(var)
         
         # add the description
         self.protocol_steps[-1].add_opperation(SendVariables(sending_party, receiving_party, variable_values))
