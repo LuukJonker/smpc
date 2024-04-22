@@ -175,7 +175,7 @@ class AbstractProtocol (ABC):
         # Verify the existence of a current protocol step
         self.in_protocol_step()
 
-        for receiver in self.parties.values:
+        for receiver in self.parties.values():
             if receiver == announcing_party:
                 continue
             self.send_variables(announcing_party, receiver, variables)
