@@ -36,6 +36,9 @@ class OT(AbstractProtocol):
     def get_party_roles(self) -> list[str]:
         return ["Sender", "Receiver"]
     
+    def output_variables(self) -> dict[str, list[str]]:
+        return {"Receiver": ["mb"]}
+    
     def __call__(self):
         sender = self.parties["Sender"]
         receiver = self.parties["Receiver"]
@@ -63,8 +66,6 @@ class OT(AbstractProtocol):
         self.compute(receiver, "mb_enc", ["b", "m0_enc", "m1_enc"], lambda b, m0, m1: (m0 if (b == 0) else m1), "choose m_b")
         self.compute(receiver, "mb", ["mb_enc", "k", "N"], lambda mb, k, N: ((mb - k) % N), "(m'_b - k) mod N")
 
-        print(receiver.get_variable("mb"))
-
         
 
 
@@ -78,6 +79,8 @@ if __name__ == "__main__":
     # ot_protocol.set_running_party("Sender", sender)
     ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
     ot_protocol()
+    print(ot_protocol.get_output())
+
     for step in ot_protocol.protocol_steps:
         for opp in step.step_description:
             print(opp.__str__())
