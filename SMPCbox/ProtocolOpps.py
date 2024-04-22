@@ -10,7 +10,7 @@ from typing import Any
 
 class ProtocolOpperation(ABC):
     def __init__(self, performed_by: ProtocolParty):
-        self.party: str = performed_by.get_party_name()
+        self.party: str = performed_by.name
 
 class LocalComputation(ProtocolOpperation):
     def __init__(self, party: ProtocolParty, computed_variables: dict[str, Any], computation_description: str):
@@ -28,8 +28,8 @@ class LocalComputation(ProtocolOpperation):
 class SendVariables(ProtocolOpperation):
     def __init__(self, sender: ProtocolParty, receiver: ProtocolParty, variables: dict[str, Any]):
         super().__init__(sender)
-        self.sender = sender.get_party_name()
-        self.receiver = receiver.get_party_name()
+        self.sender = sender.name
+        self.receiver = receiver.name
         self.send_variables = variables
     
     def __str__(self) -> str:
@@ -38,7 +38,7 @@ class SendVariables(ProtocolOpperation):
 class AnnounceGlobals(ProtocolOpperation):
     def __init__(self, announcer: ProtocolParty, variables: dict[str, Any]):
         super().__init__(announcer)
-        self.announcer = announcer.get_party_name()
+        self.announcer = announcer.name
         self.announced_variables = variables
     
     def __str__(self) -> str:

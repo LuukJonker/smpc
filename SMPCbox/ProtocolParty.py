@@ -9,8 +9,8 @@ class ProtocolParty ():
         to a certain party or wants to provide an address (ip:port) a party instance can also be provided
         to a protocol by using the set_protocol_parties or set_running_party methods of the protocol class.
         """
-        self.__socket = SMPCSocket(name, address, is_listening_socket=is_listening_socket)
-        self.__name = name
+        self.socket = SMPCSocket(name, address, is_listening_socket=is_listening_socket)
+        self.name = name
         self.__local_variables: dict[str, Any] = {}
 
         # a stack of prefixes which handle the namespaces of variable
@@ -31,12 +31,6 @@ class ProtocolParty ():
     
     def end_subroutine_protocol(self):
         self.__namespace_prefixes.pop()
-
-    def get_socket (self) -> Type[SMPCSocket]:
-        return self.__socket
-    
-    def get_party_name (self) -> str:
-        return self.__name
     
     def print_local_variables(self):
         print(self.__local_variables)
@@ -77,14 +71,14 @@ class ProtocolParty ():
     def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str):
         real_var_name = self.get_namespace() + variable_name
         if not real_var_name in self.__local_variables.keys():
-            raise Exception(f"Trying to send unknown local variable \"{real_var_name}\" from the party \"{self.get_party_name()}\"")
+            raise Exception(f"Trying to send unknown local variable \"{real_var_name}\" from the party \"{self.name}\"")
 
-        self.__socket.send_variable(receiver, real_var_name, self.get_variable(variable_name))
+        self.socket.send_variable(receiver, real_var_name, self.get_variable(variable_name))
 
     def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
         real_var_name = self.get_namespace() + variable_name
-        self.__local_variables[real_var_name] = self.__socket.receive_variable(sender, real_var_name)
+        self.__local_variables[real_var_name] = self.socket.receive_variable(sender, real_var_name)
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):
-        self.__socket.close()
+        self.socket.close()

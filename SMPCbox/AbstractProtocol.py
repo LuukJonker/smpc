@@ -59,7 +59,7 @@ class AbstractProtocol (ABC):
         """
         if not role in self.get_party_roles():
             raise Exception(f"The role \"{role}\" does not exist in the protocol\"{self.protocol_name}\"")
-        self.running_party = party.get_party_name()
+        self.running_party = party.name
         self.parties[role] = party
 
     def is_local_party(self, party: ProtocolParty) -> bool:
@@ -68,7 +68,7 @@ class AbstractProtocol (ABC):
         This is the case if there is no runnning party set in which case all parties are simulated on this machine.
         Or if the given party is the running party
         """
-        return self.running_party == None or self.running_party == party.get_party_name()
+        return self.running_party == None or self.running_party == party.name
     
     def in_protocol_step(self):
         """
@@ -219,7 +219,7 @@ class AbstractProtocol (ABC):
         if self.running_party != None:
             # find what role the running_party has and set them as the running party in the subroutine protocol
             for role, party in role_assignments.items():
-                if self.running_party == party.get_party_name():
+                if self.running_party == party.name:
                     protocol.set_running_party(role, party)
         
         # set the inputs

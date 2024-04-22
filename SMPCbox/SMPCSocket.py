@@ -119,7 +119,7 @@ class SMPCSocket ():
             # we keep checking untill the listening socket has put the message into the queue
             start_time = time.time()
             while (time.time() - start_time < timeout):
-                value = self.get_variable_from_buffer(sender.get_party_name(), variable_name)
+                value = self.get_variable_from_buffer(sender.name, variable_name)
                 if value != None:
                     return value
                 
@@ -128,20 +128,20 @@ class SMPCSocket ():
                     break
                 time.sleep(0.1)
     
-            raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.get_party_name()}\"")
+            raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.name}\"")
             self.close()
         else:
-            value = self.get_variable_from_buffer(sender.get_party_name(), variable_name)
+            value = self.get_variable_from_buffer(sender.name, variable_name)
             return value
 
     """
     This function sends the variable to this socket. 
     """
     def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str, value: Any):
-        receiver_socket: Type['SMPCSocket'] = receiver.get_socket()
+        receiver_socket: Type['SMPCSocket'] = receiver.socket
         if self.ip:
             # check for an existing connection
-            dest_ip, dest_port = receiver.get_socket().get_address()
+            dest_ip, dest_port = receiver_socket.get_address()
             existing_socket: Type[socket.socket] = self.find_client_with_address(dest_ip, dest_port)
 
             if existing_socket == None:
