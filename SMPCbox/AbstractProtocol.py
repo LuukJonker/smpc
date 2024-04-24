@@ -232,6 +232,8 @@ class AbstractProtocol (ABC):
         output = {}
         for role in self.output_variables().keys():
             self.check_role_exists(role)
+            if not self.is_local_party(self.parties[role]):
+                continue
             output[role] = {}
             for var in self.output_variables()[role]:
                output[role][var] = self.parties[role].get_variable(var)

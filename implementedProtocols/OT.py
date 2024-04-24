@@ -73,14 +73,17 @@ class OT(AbstractProtocol):
 if __name__ == "__main__":
     ot_protocol = OT()
 
-    # sender = ProtocolParty("Alice", address="127.0.0.1:4832")
-    # receiver = ProtocolParty("Bob", address="127.0.0.1:4833", is_listening_socket=False)
-    # ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
-    # ot_protocol.set_running_party("Sender", sender)
-    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    sender = ProtocolParty("Alice", address="127.0.0.1:4845")
+    receiver = ProtocolParty("Bob", address="127.0.0.1:4846", is_listening_socket=False)
+    time.sleep(5)
+    ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
+    ot_protocol.set_running_party("Sender", sender)
+    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}})#, "Receiver": {"b": 1}})
     ot_protocol()
-    print(ot_protocol.get_output())
 
     for step in ot_protocol.protocol_steps:
         for opp in step.step_description:
             print(opp.__str__())
+    
+    print(ot_protocol.get_output())
+    ot_protocol.terminate_protocol()

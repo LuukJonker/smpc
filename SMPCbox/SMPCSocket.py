@@ -74,10 +74,11 @@ class SMPCSocket ():
     def close(self):
         self.smpc_socket_in_use = False
         if self.ip:
-            self.listening_thread.join()
-            self.listening_socket.close()
-            for connection in self.client_sockets:
-                connection.close()
+            if self.listening_socket:
+                self.listening_thread.join()
+                self.listening_socket.close()
+                for connection in self.client_sockets:
+                    connection.close()
 
 
     """
@@ -114,7 +115,7 @@ class SMPCSocket ():
     This function returns the variable received from the sender with the specified variable name.
     If this variable is not received from the sender then an Exception is raised.
     """
-    def receive_variable(self, sender: Type['ProtocolParty'], variable_name: str, timeout: float = 2) -> Any:
+    def receive_variable(self, sender: Type['ProtocolParty'], variable_name: str, timeout: float = 5) -> Any:
         if self.ip:
             # we keep checking untill the listening socket has put the message into the queue
             start_time = time.time()
@@ -148,7 +149,6 @@ class SMPCSocket ():
                 # no connection so create a new connection
                 new_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 new_client.connect((dest_ip, dest_port))
-                print("CONNECTED")
                 self.client_sockets.append(new_client)
                 existing_socket = new_client
             
