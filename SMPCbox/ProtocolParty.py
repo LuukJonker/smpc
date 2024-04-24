@@ -86,14 +86,17 @@ class ProtocolParty ():
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
 
-    def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str):
-        real_var_name = self.get_namespace() + variable_name
-        self.socket.send_variable(receiver, real_var_name, self.get_variable(variable_name))
+    def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str]):
+        name_spaced_names = [self.get_namespace() + name for name in variable_names]
+        values = [self.get_variable(var) for var in name_spaced_names]
+        self.socket.send_variables(receiver, name_spaced_names, values)
 
-    def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
-        real_var_name = self.get_namespace() + variable_name
-        # add the variable to the not_yet_received_vars
-        self.not_yet_received_vars[real_var_name] = sender
+    def receive_variables (self, sender: Type['ProtocolParty'], variable_names: list[str]):
+        variable_names = [self.get_namespace() + name for name in variable_names]
+        
+        # add the variables to the not_yet_received_vars
+        for name in variable_names:
+            self.not_yet_received_vars[name] = sender
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):

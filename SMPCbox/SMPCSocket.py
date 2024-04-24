@@ -56,9 +56,18 @@ class SMPCSocket ():
                     # TODO create a setting for buffer size
                     data = socket.recv(4096)
                     if data:
-                        sender_name, var_name, value = data.decode().split()
-                        value = json.loads(value)
-                        self.put_variable_in_buffer(sender_name, var_name, value)
+                        sender_name, *variables = data.decode().split()
+
+                        var_names = []
+                        values = []
+                        for i in range(0, len(variables), 2):
+                            var_name = variables[i]
+                            value = json.loads(variables[i+1])
+
+                            var_names.append(var_name)
+                            values.append(value)
+
+                        self.put_variables_in_buffer(sender_name, var_names, values)
                     else:
                         socket.close()
                         self.client_sockets.remove(socket)
@@ -92,11 +101,13 @@ class SMPCSocket ():
         return None
         
 
-    def put_variable_in_buffer (self, sender_name: str, variable_name: str, value: Any):
+    def put_variables_in_buffer (self, sender_name: str, variable_names: list[str], values: list[Any]):
         if not sender_name in self.received_variables.keys():
             self.received_variables[sender_name] = {}
-
-        self.received_variables[sender_name][variable_name] = value
+        
+        # add all the provided variables
+        for var, val in zip(variable_names, values):
+            self.received_variables[sender_name][var] = val
     
     """
     Stores a received_variables in the buffer
@@ -130,7 +141,6 @@ class SMPCSocket ():
                 time.sleep(0.1)
     
             raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.name}\"")
-            self.close()
         else:
             value = self.get_variable_from_buffer(sender.name, variable_name)
             return value
@@ -138,7 +148,7 @@ class SMPCSocket ():
     """
     This function sends the variable to this socket. 
     """
-    def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str, value: Any):
+    def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str], values: list[Any]):
         receiver_socket: Type['SMPCSocket'] = receiver.socket
         if self.ip:
             # check for an existing connection
@@ -153,8 +163,13 @@ class SMPCSocket ():
                 existing_socket = new_client
             
             # send the message
-            msg = f"{self.name} {variable_name} {json.dumps(value)}"
+            msg = f"{self.name}"
+
+            # Add all the variables
+            for var, val in zip(variable_names, values):
+                msg += f" {var} {json.dumps(val)}"
+
             existing_socket.sendall(msg.encode())
         else: 
             # we simulate the socket by putting the variable in the buffer of received variables
-            receiver_socket.put_variable_in_buffer(self.name, variable_name, value)
+            receiver_socket.put_variables_in_buffer(self.name, variable_names, values)
