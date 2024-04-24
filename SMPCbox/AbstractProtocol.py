@@ -155,19 +155,18 @@ class AbstractProtocol (ABC):
         variables = [variables] if type(variables) == str else variables
         variable_values = {}
 
-        # TODO change the send and receive methods for protocol parties to send multiple variables as one message.
-        for var in variables:
-            # only call the send and receive methods on the parties if that party is running localy.
-            if (self.is_local_party(sending_party)):
-                sending_party.send_variable(receiving_party, var)
-                variable_values[var] = sending_party.get_variable(var)
-            
-            if (self.is_local_party(receiving_party)):
-                receiving_party.receive_variable(sending_party, var)
-                if var not in variable_values.keys():
-                    # TODO set to none when the get_variable becomes blocking.
-                    # TODO add a ReceivedVar to the protocolOpps
-                    variable_values[var] = receiving_party.get_variable(var)
+        # only call the send and receive methods on the parties if that party is running localy.
+        if (self.is_local_party(sending_party)):
+            sending_party.send_variables(receiving_party, variables)
+            for var in variables:
+                variable_values[var] = sending_party.get_variable(var) 
+        
+        if (self.is_local_party(receiving_party)):
+            receiving_party.receive_variables(sending_party, variables)
+            if (not self.is_local_party(sending_party)):
+                for var in variables:
+                    # The variable is posibly not received yet.
+                    variable_values[var] = None
         
         # add the description
         self.protocol_steps[-1].add_opperation(SendVariables(sending_party, receiving_party, variable_values))
@@ -232,6 +231,8 @@ class AbstractProtocol (ABC):
         output = {}
         for role in self.output_variables().keys():
             self.check_role_exists(role)
+            if not self.is_local_party(self.parties[role]):
+                continue
             output[role] = {}
             for var in self.output_variables()[role]:
                output[role][var] = self.parties[role].get_variable(var)

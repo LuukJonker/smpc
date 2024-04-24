@@ -16,6 +16,10 @@ class ProtocolParty ():
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
 
+        # stores the variables which have been "received" to not have to request them from the 
+        # SMPCSocket yet and the sender which send the variable
+        self.not_yet_received_vars: dict[str, ProtocolParty] = {}
+
     def get_namespace(self) -> str:
         if len(self.__namespace_prefixes) == 0:
             return ""
@@ -36,7 +40,21 @@ class ProtocolParty ():
         print(self.__local_variables)
     
     def get_variable(self, variable_name: str):
-        return self.__local_variables[self.get_namespace() + variable_name]
+        # handle the namespace
+        variable_name = self.get_namespace() + variable_name
+
+        # get the variable from the socket if this hasn't been done
+        if variable_name in self.not_yet_received_vars.keys():
+            sender = self.not_yet_received_vars[variable_name]
+            value = self.socket.receive_variable(sender, variable_name)
+            self.__local_variables[variable_name] = value
+            # the variable has now been received
+            del self.not_yet_received_vars[variable_name]
+
+        if not variable_name in self.__local_variables.keys():
+            raise Exception(f"Trying to get non existend variable \"{variable_name}\" from the party \"{self.name}\"")
+        
+        return self.__local_variables[variable_name]
 
     def run_computation(self, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
         # make sure the input vars and computed_vars are lists
@@ -68,16 +86,17 @@ class ProtocolParty ():
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
 
-    def send_variable (self, receiver: Type['ProtocolParty'], variable_name: str):
-        real_var_name = self.get_namespace() + variable_name
-        if not real_var_name in self.__local_variables.keys():
-            raise Exception(f"Trying to send unknown local variable \"{real_var_name}\" from the party \"{self.name}\"")
+    def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str]):
+        name_spaced_names = [self.get_namespace() + name for name in variable_names]
+        values = [self.get_variable(var) for var in name_spaced_names]
+        self.socket.send_variables(receiver, name_spaced_names, values)
 
-        self.socket.send_variable(receiver, real_var_name, self.get_variable(variable_name))
-
-    def receive_variable (self, sender: Type['ProtocolParty'], variable_name: str):
-        real_var_name = self.get_namespace() + variable_name
-        self.__local_variables[real_var_name] = self.socket.receive_variable(sender, real_var_name)
+    def receive_variables (self, sender: Type['ProtocolParty'], variable_names: list[str]):
+        variable_names = [self.get_namespace() + name for name in variable_names]
+        
+        # add the variables to the not_yet_received_vars
+        for name in variable_names:
+            self.not_yet_received_vars[name] = sender
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):
