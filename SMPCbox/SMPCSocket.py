@@ -143,6 +143,8 @@ class SMPCSocket ():
             raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.name}\"")
         else:
             value = self.get_variable_from_buffer(sender.name, variable_name)
+            if value == None:
+                raise Exception(f"The variable \"{variable_name}\" has not been received from the party \"{sender.name}\"")
             return value
 
     """

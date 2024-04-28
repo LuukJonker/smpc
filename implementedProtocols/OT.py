@@ -27,6 +27,8 @@ def getRSAvars():
 
 
 class OT(AbstractProtocol):
+    protocol_name="ObliviousTransfer"
+
     def __init__(self):
         super().__init__()
 
@@ -44,7 +46,6 @@ class OT(AbstractProtocol):
         receiver = self.parties["Receiver"]
 
         self.add_protocol_step("OT step")
-
         self.compute(sender, ["N", "d", "e"], [], getRSAvars, "RSA()")
         self.send_variables(sender, receiver, ["N", "e"])
         self.compute(sender, ["x0", "x1"], [], lambda: (int.from_bytes(os.urandom(16), byteorder='big'), int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
