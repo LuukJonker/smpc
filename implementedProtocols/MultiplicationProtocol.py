@@ -57,18 +57,22 @@ class SecretShareMultiplication(AbstractProtocol):
 
 
 if __name__ == "__main__":
-    alice = ProtocolParty("Alice", "127.0.0.1:3299")
-    bob = ProtocolParty("Bob", "127.0.0.1:3300", is_listening_socket=False)
-    time.sleep(5)
+    # alice = ProtocolParty("Alice", "127.0.0.1:3299")
+    # bob = ProtocolParty("Bob", "127.0.0.1:3300", is_listening_socket=False)
+    # time.sleep(5)
     p = SecretShareMultiplication(l=32)
-    p.set_protocol_parties({"Alice": alice, "Bob": bob})
-    p.set_running_party("Alice", alice)
-    p.set_input({"Alice": {"a": 21}})
+    # p.set_protocol_parties({"Alice": alice, "Bob": bob})
+    # p.set_running_party("Alice", alice)
+    p.set_input({"Alice": {"a": 21}, "Bob": {"b": 3289}})
     s = time.time()
     p()
     e = time.time()
     print("execution time:", e-s)
     out = p.get_output()
+    for role, stats in p.get_statistics().items():
+        print(role)
+        print(stats)
+
     p.terminate_protocol()
     print(out)
     print("Shared secret (x+y):", out["Alice"]["x"] + out["Bob"]["y"] )

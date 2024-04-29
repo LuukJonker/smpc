@@ -49,7 +49,7 @@ class ProtocolSubroutine(ProtocolOpperation):
     in the subroutine to the corresponding local variable name used in the ProtocolParty
     """
     def __init__(self, subroutine_protocol: Type['AbstractProtocol'], role_assignment: dict[str, str], input_variable_mapping: dict[str, dict[str, str]], output_variable_mapping: dict[str, dict[str, str]]):
-        self.step_description: list[Type['ProtocolStep']] = subroutine_protocol.protocol_steps
+        self.step_description: list[Type['ProtocolStep']] = subroutine_protocol.get_protocol_steps()
         self.role_assignment = role_assignment
         self.input_variables = input_variable_mapping
         self.output_variables = output_variable_mapping

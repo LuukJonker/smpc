@@ -67,9 +67,6 @@ class OT(AbstractProtocol):
         self.compute(receiver, "mb_enc", ["b", "m0_enc", "m1_enc"], lambda b, m0, m1: (m0 if (b == 0) else m1), "choose m_b")
         self.compute(receiver, "mb", ["mb_enc", "k", "N"], lambda mb, k, N: ((mb - k) % N), "(m'_b - k) mod N")
 
-        
-
-
 
 if __name__ == "__main__":
     ot_protocol = OT()
@@ -79,6 +76,9 @@ if __name__ == "__main__":
     ot_protocol()
     e = time.time()
     print("OT time", e-s)
+    for role, stats in ot_protocol.get_statistics().items():
+        print(role)
+        print(stats)
 
     # sender = ProtocolParty("Alice", address="127.0.0.1:4841")
     # receiver = ProtocolParty("Bob", address="127.0.0.1:4840", is_listening_socket=False)
