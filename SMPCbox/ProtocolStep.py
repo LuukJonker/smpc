@@ -19,16 +19,3 @@ class ProtocolStep(ABC):
         Can be used to remove opperations added by methods which are used as helpers for a more complex opperation
         """
         self.step_description.pop()
-
-class ProtocolSubroutine(ProtocolStep):
-    """
-    A special type of ProtocolStep which is used when a protocol is used as a subroutine.
-    The role_assignment contains a mapping from the protocol roles to the protocol party name
-    The input_variable_mapping contains, for each role, a mapping of the input variable name as mentioned
-    in the subroutine to the corresponding local variable name used in the ProtocolParty
-    """
-    def __init__(self, subroutine_protocol: Type['AbstractProtocol'], role_assignment: dict[str, str], input_variable_mapping: dict[str, dict[str, str]]):
-        super().__init__(subroutine_protocol.protocol_name)
-        self.step_description: list[ProtocolStep] = subroutine_protocol.protocol_steps
-        self.role_assignment = role_assignment
-        self.input_variables = input_variable_mapping
