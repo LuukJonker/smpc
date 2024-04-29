@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
-from SMPCbox.ProtocolParty import ProtocolParty
+from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
 from SMPCbox.ProtocolStep import ProtocolStep, ProtocolSubroutine
 from SMPCbox.ProtocolOpps import LocalComputation, SendVariables, AnnounceGlobals
 
@@ -324,7 +324,17 @@ class AbstractProtocol (ABC):
             party.end_subroutine_protocol()
         
         self.protocol_steps.append(ProtocolSubroutine(protocol, role_assignments, input_var_mapping))
-
+    
+    def get_statistics(self) -> dict[str, PartyStats]:
+        """
+        Returns the statistics of each party in the protocol
+        The return is a dictionary with each role mapping to the statistics of that party
+        """
+        stats = {}
+        for role, party in self.parties.items():
+            stats[role] = party.get_stats()
+        
+        return stats
     
     def terminate_protocol(self):
         """

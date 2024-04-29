@@ -1,5 +1,15 @@
 from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
+import time
+    
+class PartyStats():
+    execution_time = 0
+    wait_time = 0
+
+    def __str__(self):
+        print("Statistics")
+        print(f"execution_time: {self.execution_time}")
+        print(f"wait_time: {self.wait_time}")
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None, is_listening_socket=True):
@@ -12,6 +22,7 @@ class ProtocolParty ():
         self.socket = SMPCSocket(name, address, is_listening_socket=is_listening_socket)
         self.name = name
         self.__local_variables: dict[str, Any] = {}
+        self.statistics = PartyStats()
 
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
@@ -46,7 +57,12 @@ class ProtocolParty ():
         # get the variable from the socket if this hasn't been done
         if variable_name in self.not_yet_received_vars.keys():
             sender = self.not_yet_received_vars[variable_name]
+            # request the variable from the socket
+            s_wait_time = time.time()
             value = self.socket.receive_variable(sender, variable_name)
+            e_wait_time = time.time()
+            self.statistics.wait_time += e_wait_time - s_wait_time
+
             self.__local_variables[variable_name] = value
             # the variable has now been received
             del self.not_yet_received_vars[variable_name]
@@ -68,7 +84,10 @@ class ProtocolParty ():
         computed_vars = [self.get_namespace() + name for name in computed_vars]
 
         # get the local variables
+        t_start = time.time()
         res = computation(*input_vals)
+        t_end = time.time()
+        self.statistics.execution_time += t_end - t_start
 
         # assign the output if there is just a single output variable
         if len(computed_vars) == 1:
@@ -97,6 +116,12 @@ class ProtocolParty ():
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender
+    
+    def get_stats(self) -> PartyStats:
+        """
+        Retreives the statistics of a single ProtocolParty
+        """
+        return self.statistics
 
     """ should be called to make sure the sockets exit nicely """
     def exit_protocol(self):
