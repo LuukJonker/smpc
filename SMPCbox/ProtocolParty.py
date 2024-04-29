@@ -7,9 +7,10 @@ class PartyStats():
     wait_time = 0
 
     def __str__(self):
-        print("Statistics")
-        print(f"execution_time: {self.execution_time}")
-        print(f"wait_time: {self.wait_time}")
+        return f"""
+        Statistics
+        execution_time: {self.execution_time}
+        wait_time: {self.wait_time}"""
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None, is_listening_socket=True):
