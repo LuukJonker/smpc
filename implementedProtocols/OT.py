@@ -27,6 +27,8 @@ def getRSAvars():
 
 
 class OT(AbstractProtocol):
+    protocol_name="ObliviousTransfer"
+
     def __init__(self):
         super().__init__()
 
@@ -44,7 +46,6 @@ class OT(AbstractProtocol):
         receiver = self.parties["Receiver"]
 
         self.add_protocol_step("OT step")
-
         self.compute(sender, ["N", "d", "e"], [], getRSAvars, "RSA()")
         self.send_variables(sender, receiver, ["N", "e"])
         self.compute(sender, ["x0", "x1"], [], lambda: (int.from_bytes(os.urandom(16), byteorder='big'), int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
@@ -73,18 +74,24 @@ class OT(AbstractProtocol):
 if __name__ == "__main__":
     ot_protocol = OT()
 
-    sender = ProtocolParty("Alice", address="127.0.0.1:4841")
-    receiver = ProtocolParty("Bob", address="127.0.0.1:4840", is_listening_socket=False)
-    time.sleep(5)
-    ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
-    ot_protocol.set_running_party("Sender", sender)
-    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}})
-    # ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    s = time.time()
     ot_protocol()
+    e = time.time()
+    print("OT time", e-s)
 
-    for step in ot_protocol.protocol_steps:
-        for opp in step.step_description:
-            print(opp.__str__())
+    # sender = ProtocolParty("Alice", address="127.0.0.1:4841")
+    # receiver = ProtocolParty("Bob", address="127.0.0.1:4840", is_listening_socket=False)
+    # time.sleep(5)
+    # ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
+    # ot_protocol.set_running_party("Sender", sender)
+    # ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}})
+    # # ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    # ot_protocol()
+
+    # for step in ot_protocol.protocol_steps:
+    #     for opp in step.step_description:
+    #         print(opp.__str__())
     
-    print(ot_protocol.get_output())
-    ot_protocol.terminate_protocol()
+    # print(ot_protocol.get_output())
+    # ot_protocol.terminate_protocol()
