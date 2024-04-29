@@ -1,16 +1,26 @@
 from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
+from sys import getsizeof
     
 class PartyStats():
     execution_time = 0
     wait_time = 0
+    messages_send = 0
+    messages_received = 0
+    bytes_send = 0
+    bytes_received = 0
+
 
     def __str__(self):
         return f"""
         Statistics
         execution_time: {self.execution_time}
-        wait_time: {self.wait_time}"""
+        wait_time: {self.wait_time}
+        messages_send: {self.messages_send}
+        bytes_send: {self.bytes_send}
+        messages_received: {self.messages_received}
+        bytes_received: {self.bytes_received}"""
 
 class ProtocolParty ():
     def __init__(self, name: str, address: str = None, is_listening_socket=True):
@@ -62,6 +72,10 @@ class ProtocolParty ():
             s_wait_time = time.time()
             value = self.socket.receive_variable(sender, variable_name)
             e_wait_time = time.time()
+
+            # add the received values bytes to the received bytes stat
+            self.statistics.bytes_received += getsizeof(value)
+            
             self.statistics.wait_time += e_wait_time - s_wait_time
 
             self.__local_variables[variable_name] = value
@@ -108,6 +122,12 @@ class ProtocolParty ():
 
     def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str]):
         values = [self.get_variable(var) for var in variable_names]
+
+        # update the statistics
+        self.statistics.messages_send += 1
+        for i in values:
+            self.statistics.bytes_send += getsizeof(i)
+
         variable_names = [self.get_namespace() + name for name in variable_names]
         self.socket.send_variables(receiver, variable_names, values)
 
@@ -116,6 +136,8 @@ class ProtocolParty ():
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender
+        
+        self.statistics.messages_received += 1
     
     def get_stats(self) -> PartyStats:
         """
