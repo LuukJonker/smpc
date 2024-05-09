@@ -6,8 +6,10 @@ from SMPCbox.ProtocolOpps import LocalComputation, SendVariables, AnnounceGlobal
 
 class AbstractProtocol (ABC):
     def __init__(self):
-        # The name of the protocol
-        self.protocol_name: str = ""
+        # Check if the user has already specified the name of the protocol
+        if not hasattr(self, 'protocol_name'):
+            self.protocol_name: str = "[Default Protocol Name]"
+
         self.parties: dict[str, ProtocolParty] = {}
         self.running_party = None
         self.protocol_steps: list[ProtocolStep] = []
