@@ -6,7 +6,11 @@ All the opperations are inherited versions of the ProtocolOpperation class.
 from enum import Enum
 from abc import ABC
 from SMPCbox.ProtocolParty import ProtocolParty
-from typing import Any, Type
+from typing import Any, Type, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from SMPCbox.AbstractProtocol import AbstractProtocol
+    from SMPCbox.ProtocolStep import ProtocolStep
 
 class ProtocolOpperation(ABC):
     pass
@@ -31,7 +35,7 @@ class SendVariables(ProtocolOpperation):
         self.send_variables = variables
     
     def __str__(self) -> str:
-        return f"{self.party}: send {self.send_variables} to {self.receiver}"
+        return f"{self.sender}: send {self.send_variables} to {self.receiver}"
     
 class AnnounceGlobals(ProtocolOpperation):
     def __init__(self, announcer: ProtocolParty, variables: dict[str, Any]):
@@ -39,7 +43,7 @@ class AnnounceGlobals(ProtocolOpperation):
         self.announced_variables = variables
     
     def __str__(self) -> str:
-        return f"{self.party}: announce {self.announced_variables}"
+        return f"{self.announcer}: announce {self.announced_variables}"
     
 class ProtocolSubroutine(ProtocolOpperation):
     """
@@ -48,8 +52,8 @@ class ProtocolSubroutine(ProtocolOpperation):
     The input_variable_mapping contains, for each role, a mapping of the input variable name as mentioned
     in the subroutine to the corresponding local variable name used in the ProtocolParty
     """
-    def __init__(self, subroutine_protocol: Type['AbstractProtocol'], role_assignment: dict[str, str], input_variable_mapping: dict[str, dict[str, str]], output_variable_mapping: dict[str, dict[str, str]]):
-        self.step_description: list[Type['ProtocolStep']] = subroutine_protocol.get_protocol_steps()
+    def __init__(self, subroutine_protocol: 'AbstractProtocol', role_assignment: dict[str, str], input_variable_mapping: dict[str, dict[str, str]], output_variable_mapping: dict[str, dict[str, str]]):
+        self.step_description: list['ProtocolStep'] = subroutine_protocol.get_protocol_steps()
         self.role_assignment = role_assignment
         self.input_variables = input_variable_mapping
         self.output_variables = output_variable_mapping

@@ -4,12 +4,13 @@ import time
 from sys import getsizeof
     
 class PartyStats():
-    execution_time = 0
-    wait_time = 0
-    messages_send = 0
-    messages_received = 0
-    bytes_send = 0
-    bytes_received = 0
+    def __init__(self):
+        self.execution_time: float = 0
+        self.wait_time: float = 0
+        self.messages_send: int = 0
+        self.messages_received: int = 0
+        self.bytes_send: int = 0
+        self.bytes_received: int = 0
 
 
     def __str__(self):
@@ -23,7 +24,7 @@ class PartyStats():
         bytes_received: {self.bytes_received}"""
 
 class ProtocolParty ():
-    def __init__(self, name: str, address: str = None, is_listening_socket=True):
+    def __init__(self, name: str, address: str = "", is_listening_socket=True):
         """
         Instantiates a ProtocolParty. ProtocolParty instances are used within protocols, protocols themselfs
         instantiate ProtocolParty instances by default though when a user wants to assign a specific name
@@ -120,7 +121,7 @@ class ProtocolParty ():
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
 
-    def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str]):
+    def send_variables (self, receiver: 'ProtocolParty', variable_names: list[str]):
         values = [self.get_variable(var) for var in variable_names]
 
         # update the statistics
@@ -131,7 +132,7 @@ class ProtocolParty ():
         variable_names = [self.get_namespace() + name for name in variable_names]
         self.socket.send_variables(receiver, variable_names, values)
 
-    def receive_variables (self, sender: Type['ProtocolParty'], variable_names: list[str]):
+    def receive_variables (self, sender: 'ProtocolParty', variable_names: list[str]):
         variable_names = [self.get_namespace() + name for name in variable_names]
         # add the variables to the not_yet_received_vars
         for name in variable_names:
