@@ -4,6 +4,10 @@ from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
 from SMPCbox.ProtocolStep import ProtocolStep
 from SMPCbox.ProtocolOpps import LocalComputation, SendVariables, AnnounceGlobals, ProtocolSubroutine
 
+def convert_to_list(var: Union[str, list[str]]):
+    list_var: list[str] = [var] if type(var) == str else list(var)
+    return list_var
+
 class AbstractProtocol (ABC):
     def __init__(self):
         # Check if the user has already specified the name of the protocol
@@ -13,7 +17,7 @@ class AbstractProtocol (ABC):
         self.parties: dict[str, ProtocolParty] = {}
         self.running_party = None
         self.protocol_steps: list[ProtocolStep] = []
-        self.protocol_output: dict[str, dict[str, Any]] = None
+        self.protocol_output: dict[str, dict[str, Any]] = {}
 
         # instantiate all the ProtocolParty classes with the default name of the role.
         # These might be overwritten if the user sets them later.
@@ -95,7 +99,7 @@ class AbstractProtocol (ABC):
         description: A string describing what the computation does. This is used for protocol debugging and visualisation.
         """
 
-        computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
+        computed_vars = convert_to_list(computed_vars)
 
         # Verify the existence of a current protocol step
         self.in_protocol_step()
@@ -112,15 +116,15 @@ class AbstractProtocol (ABC):
             computed_var_values[name] = computing_party.get_variable(name)
 
         # add the local computation
-        self.protocol_steps[-1].add_opperation(LocalComputation(computing_party, computed_vars, description))
+        self.protocol_steps[-1].add_opperation(LocalComputation(computing_party, computed_var_values, description))
     
-    def add_protocol_step(self, step_name: str = None):
+    def add_protocol_step(self, step_name: str = ""):
         """
         Declares the start of a new round/step of the protocol.
         Any calls to run_computation after a call to this method will be ran as part of this step.
         """
-        if step_name == None:
-            step_name = f"step_{len(self.protocol_steps + 1)}"
+        if step_name == "":
+            step_name = f"step_{len(self.protocol_steps) + 1}"
 
         self.protocol_steps.append(ProtocolStep(step_name))
     
@@ -137,7 +141,7 @@ class AbstractProtocol (ABC):
         self.in_protocol_step()
 
         # in the case that the variables is just a single string convert it to a list
-        variables = [variables] if type(variables) == str else variables
+        variables = convert_to_list(variables)
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
@@ -231,7 +235,7 @@ class AbstractProtocol (ABC):
         After a call to this method the variables with the provided names can be used as local variables in all party.
         """
 
-        variables = variables if type(variables) == list else [variables]
+        variables = convert_to_list(variables)
         
         # Verify the existence of a current protocol step
         self.in_protocol_step()
@@ -242,11 +246,14 @@ class AbstractProtocol (ABC):
             self.send_variables(announcing_party, receiver, variables)
             # Remove the SendVariables since it will be replaced by an AnnounceGlobals
             self.protocol_steps[-1].remove_last_opperation()
+        
 
-        self.protocol_steps[-1].add_opperation(AnnounceGlobals(announcing_party, variables))
+        vars = {var: announcing_party.get_variable(var) for var in variables}
+
+        self.protocol_steps[-1].add_opperation(AnnounceGlobals(announcing_party, vars))
 
     
-    def run_subroutine_protocol(self, protocol: Type['AbstractProtocol'], role_assignments: dict[str, ProtocolParty], inputs: dict[str, dict[str, str]], output_vars: dict[str, dict[str, str]]):
+    def run_subroutine_protocol(self, protocol_class: Type['AbstractProtocol'], role_assignments: dict[str, ProtocolParty], inputs: dict[str, dict[str, str]], output_vars: dict[str, dict[str, str]]):
         """
         Runs the provided protocol as part of the current protocol. Appart from the protocol class (not instance), there are two required arguments:
         role_assignments: A dictionary which should map every role of the protocol being run to an existing ProtocolParty.
@@ -261,8 +268,8 @@ class AbstractProtocol (ABC):
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
 
-        p = protocol()
-        p.set_protocol_parties(role_assignments)
+        protocol = protocol_class()
+        protocol.set_protocol_parties(role_assignments)
 
         # before calling start_subroutine_protocol on the parties
         # we first gather the provided variables from the parties to avoid namespace issues.
@@ -270,7 +277,7 @@ class AbstractProtocol (ABC):
         # used for visualisation
         input_var_mapping = {}
         for role in inputs.keys():
-            p.check_role_exists(role)
+            protocol.check_role_exists(role)
             party = role_assignments[role]
 
             if not self.is_local_party(party):
@@ -295,20 +302,20 @@ class AbstractProtocol (ABC):
             party.start_subroutine_protocol(protocol.protocol_name)
 
         # set the constructed input_values
-        p.set_input(input_values)
+        protocol.set_input(input_values)
 
         # Comunicate to the protocol wether a certain party is running the protocol localy
         if self.running_party != None:
             # find what role the running_party has and set them as the running party in the subroutine protocol
             for role, party in role_assignments.items():
                 if self.running_party == party.name:
-                    p.set_running_party(role, party)
+                    protocol.set_running_party(role, party)
         
         # run the protocol
-        p()
+        protocol()
 
         # Get the output (still part of the subroutine)
-        subroutine_output = p.get_output()
+        subroutine_output = protocol.get_output()
         
         # Comunicate the end of the subroutine to the parties involved
         for party in role_assignments.values():
@@ -324,8 +331,8 @@ class AbstractProtocol (ABC):
             for subroutine_output_var, value in subroutine_output[role].items():
                 party.set_local_variable(output_vars[role][subroutine_output_var], value)
 
-        
-        self.protocol_steps[-1].add_opperation(ProtocolSubroutine(p, role_assignments, input_var_mapping, output_vars))
+        role_assignments_names = {role: party.name for role, party in role_assignments.items()}
+        self.protocol_steps[-1].add_opperation(ProtocolSubroutine(protocol, role_assignments_names, input_var_mapping, output_vars))
     
     def get_statistics(self) -> dict[str, PartyStats]:
         """
