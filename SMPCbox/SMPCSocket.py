@@ -1,9 +1,12 @@
-from typing import Any, Type
+from typing import Any, Type, TYPE_CHECKING, Union
 import socket 
 import threading
 import json
 import select
 import time
+
+if TYPE_CHECKING:
+    from ProtocolParty import ProtocolParty
 
 """
 Parses an adress such as:
@@ -12,23 +15,23 @@ and returns the tuple:
 ("127.0.0.1", 3291)
 """
 def parse_address(address: str) -> tuple[str, int]:
-    if address == None:
-        return (None, None)
     ip, port = address.split(":")
     return (ip, int(port))
 
 class SMPCSocket ():
-    def __init__ (self, party_name:str, address: str = None, is_listening_socket:bool=False):
-        self.ip, self.port = parse_address(address)
+    def __init__ (self, party_name:str, address: str = "", is_listening_socket:bool=False):
+        if address == "":
+            self.ip = None
+            self.port = None
+        else:
+            self.ip, self.port = parse_address(address)
+
         self.name = party_name
         # a buffer storing all received variables which have not been requested by the parrent class via
         # the receive variable function
         self.received_variables: dict[str, dict[str, Any]] = {}
-        self.listening_socket = None
-
         self.smpc_socket_in_use = True
         self.client_sockets = []
-        self.listening_thread = None
 
         if self.ip:
             if is_listening_socket:
@@ -93,7 +96,7 @@ class SMPCSocket ():
     """
     This method is used to find a client from the list of already existing connections.
     """
-    def find_client_with_address(self, ip, port):
+    def find_client_with_address(self, ip, port) -> Union[socket.socket, None]:
         for client in self.client_sockets:
             client_ip, client_port = client.getsockname()
             if client_ip == ip and client_port == port:
@@ -126,7 +129,7 @@ class SMPCSocket ():
     This function returns the variable received from the sender with the specified variable name.
     If this variable is not received from the sender then an Exception is raised.
     """
-    def receive_variable(self, sender: Type['Protocolc80Party'], variable_name: str, timeout: float = 10) -> Any:
+    def receive_variable(self, sender: 'ProtocolParty', variable_name: str, timeout: float = 10) -> Any:
         if self.ip:
             # we keep checking untill the listening socket has put the message into the queue
             start_time = time.time()
@@ -150,12 +153,12 @@ class SMPCSocket ():
     """
     This function sends the variable to this socket. 
     """
-    def send_variables (self, receiver: Type['ProtocolParty'], variable_names: list[str], values: list[Any]):
-        receiver_socket: Type['SMPCSocket'] = receiver.socket
+    def send_variables (self, receiver: 'ProtocolParty', variable_names: list[str], values: list[Any]):
+        receiver_socket: 'SMPCSocket' = receiver.socket
         if self.ip:
             # check for an existing connection
             dest_ip, dest_port = receiver_socket.get_address()
-            existing_socket: Type[socket.socket] = self.find_client_with_address(dest_ip, dest_port)
+            existing_socket = self.find_client_with_address(dest_ip, dest_port)
 
             if existing_socket == None:
                 # no connection so create a new connection
