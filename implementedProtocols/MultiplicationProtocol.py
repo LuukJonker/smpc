@@ -16,7 +16,7 @@ def rand_int():
 
 class SecretShareMultiplication(AbstractProtocol):
     protocol_name = "SecretShareMultiplication"
-    
+
     def __init__(self, l=32):
         """
         The opperations are done module 2^l
@@ -26,13 +26,13 @@ class SecretShareMultiplication(AbstractProtocol):
 
     def get_expected_input(self):
         return {"Alice": ["a"], "Bob": ["b"]}
-    
+
     def get_party_roles(self) -> list[str]:
         return ["Alice", "Bob"]
-    
+
     def output_variables(self) -> dict[str, list[str]]:
         return {"Alice": ["x"], "Bob": ["y"]}
-    
+
     def __call__(self):
         self.add_protocol_step("Generate r")
         r_vars = ["r" + str(num) for num in range(self.l)]
@@ -48,7 +48,7 @@ class SecretShareMultiplication(AbstractProtocol):
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
             self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
-            
+
         self.add_protocol_step("Calculate outputs")
         self.compute(self.parties["Alice"], "x", r_vars, lambda *r_vals: -sum(r_vals), "- Sum of all r_i")
 

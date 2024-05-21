@@ -17,7 +17,7 @@ if __name__ == "__main__":
     for step in ot_protocol.protocol_steps:
         for opp in step.step_description:
             print(opp.__str__())
-    
+
     print(ot_protocol.get_output())
-    
+
     ot_protocol.terminate_protocol()
