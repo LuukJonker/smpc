@@ -4,6 +4,7 @@ from enum import Enum
 import ui
 from PyQt5.QtWidgets import QWidget, QApplication
 import sys
+from SMPCbox.AbstractProtocol import AbstractProtocol, AbstractProtocolVisualiser
 
 
 class Client:
@@ -15,12 +16,14 @@ class Client:
     def add_step(self, step: "Step"):
         self.steps.append(step)
 
+
 class StepType(Enum):
     SENDRECEIVE = 1
     COMPUTATION = 2
     SUBROUTINE = 3
     BROADCAST = 4
     INPUT = 5
+
 
 class Step(ABC):
     def __init__(self):
@@ -55,6 +58,7 @@ class Step(ABC):
             return StepType.INPUT
         else:
             raise ValueError("Unknown step type")
+
 
 class SendReceive(Step):
     def __init__(self, sender: Client, receiver: Client, vars: list[str]):
@@ -95,6 +99,7 @@ class Computation(Step):
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+
 class Broadcast(Step):
     def __init__(self, party: Client, vars: list[str]):
         super().__init__()
@@ -114,8 +119,14 @@ class Broadcast(Step):
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+
 class Subroutine(Step):
-    def __init__(self, name: str, input_mapping: dict[str, dict[str, str]], output_mapping: dict[str, dict[str, str]]):
+    def __init__(
+        self,
+        name: str,
+        input_mapping: dict[str, dict[str, str]],
+        output_mapping: dict[str, dict[str, str]],
+    ):
         super().__init__()
         self.name = name
         self.input_mapping = input_mapping
@@ -132,7 +143,9 @@ class Subroutine(Step):
         return []
 
     def display_result(self, res: list[str]):
+        """Subroutine does not display any result."""
         pass
+
 
 class Input(Step):
     def __init__(self, var_name: str, var_type: type):
@@ -151,15 +164,19 @@ class Input(Step):
         return []
 
     def display_result(self, res: list[str]):
+        """Input does not display any result."""
         pass
 
 
-class SMPCvisualiser():
-    def __init__(self, parties: list[str]):
+class Protocolvisualiser(AbstractProtocolVisualiser):
+    def __init__(self, protocol: AbstractProtocol):
         self.app = QApplication(sys.argv)
-        self.gui = ui.MainWindow(parties, self.one_step, self.run, self.reset)
-        self.party_names = parties
-        self.parties: dict[str, Client] = {party: Client(party) for party in parties}
+        self.protocol = protocol
+        self.party_names = self.protocol.get_party_roles()
+        self.gui = ui.MainWindow(self.party_names, self.one_step, self.run, self.reset)
+        self.parties: dict[str, Client] = {
+            party: Client(party) for party in self.party_names
+        }
 
         self.steps: list[Step] = []
         self.subroutine_stack: list[Subroutine] = []
@@ -177,7 +194,7 @@ class SMPCvisualiser():
             self.step_index += 1
 
     def run(self):
-        for step in self.steps[self.step_index:]:
+        for step in self.steps[self.step_index :]:
             res = step.handle(list(self.parties.values()))
             step.display_result(res)
 
@@ -205,28 +222,52 @@ class SMPCvisualiser():
         inst.widget = widget
         self.steps.append(inst)
 
-    def send_message(self, sending_party_name: str, receiving_party_name: str, variables: list[str]):
-        inst = SendReceive(self.parties[sending_party_name], self.parties[receiving_party_name], variables)
+    def send_message(
+        self, sending_party_name: str, receiving_party_name: str, variables: str | list[str]
+    ):
+        if isinstance(variables, str):
+            variables = [variables]
+
+        inst = SendReceive(
+            self.parties[sending_party_name],
+            self.parties[receiving_party_name],
+            variables,
+        )
         sending = list(self.parties.keys()).index(sending_party_name)
         receiving = list(self.parties.keys()).index(receiving_party_name)
-        widget = self.gui.add_send_step(sending, receiving, variables, variables)  #! Variables can be different on the other side
+        widget = self.gui.add_send_step(
+            sending, receiving, variables, variables
+        )  #! Variables can be different on the other side
         inst.widget = widget
         self.steps.append(inst)
 
-    def broadcast_variable(self, sending_party_name, variables: list[str]):
+    def broadcast_variable(self, sending_party_name: str, variables: list[str]):
         inst = Broadcast(self.parties[sending_party_name], variables)
         widget = self.gui.add_broadcast_step(sending_party_name, variables)
         inst.widget = widget
         self.steps.append(inst)
 
-    def start_subroutine(self, subroutine_name, input_mapping: dict[str, dict[str, str]], output_mapping: dict[str, dict[str, str]]):
+    def start_subroutine(
+        self,
+        subroutine_name: str,
+        input_mapping: dict[str, dict[str, str]],
+        output_mapping: dict[str, dict[str, str]],
+    ):
+        """Start a new subroutine.
+
+        Args:
+            subroutine_name (str): _description_
+            input_mapping (dict[str, dict[str, str]]): _description_
+            output_mapping (dict[str, dict[str, str]]): _description_
+        """
         subroutine = Subroutine(subroutine_name, input_mapping, output_mapping)
         self.subroutine_stack.append(subroutine)
 
     def end_subroutine(self):
         self.subroutine_stack.pop()
 
-v = SMPCvisualiser(["Alice", "Bob", "Charlie"])
+
+v = Protocolvisualiser(None)
 v.add_input("a")
 v.add_input("b")
 v.add_computation("c", "a + b")

@@ -32,9 +32,9 @@ class Section(QWidget):
 
         self.frame = QFrame()
         self.label1 = QLabel(text)
-        self.label1.setAlignment(Qt.AlignCenter)
+        self.label1.setAlignment(Qt.AlignCenter) # type: ignore
         self.label2 = QLabel("")
-        self.label2.setAlignment(Qt.AlignCenter)
+        self.label2.setAlignment(Qt.AlignCenter) # type: ignore
         layout.addWidget(self.label1)
 
         if extra_text:
@@ -71,11 +71,9 @@ class Input(QWidget):
         )
 
         layout = QHBoxLayout()
-        # layout.setContentsMargins(10, 10, 10, 10)
-        # layout.setSpacing(20)
 
         self.frame = QFrame()
-        self.prompt = QLabel(prompt)
+        self.prompt = QLabel(f"{prompt}: ")
         self.input = QLineEdit()
 
         layout.addWidget(self.prompt)
@@ -159,8 +157,8 @@ class SendReceiveWidget(QWidget):
         self.send_section.label2.setText("")
         self.receive_section.label2.setText("")
 
-    def paintEvent(self, event):
-        super().paintEvent(event)
+    def paintEvent(self, a0):
+        super().paintEvent(a0)
         painter = QPainter(self)
         pen = QPen(QColor("black"))
         pen.setWidth(2)
