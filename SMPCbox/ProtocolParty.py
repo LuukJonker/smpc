@@ -1,4 +1,4 @@
-from typing import Type, Any, Callable, Union
+from typing import Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
 from sys import getsizeof

@@ -1,4 +1,5 @@
-from typing import Any, Type, TYPE_CHECKING, Union
+from __future__ import annotations
+from typing import Any, TYPE_CHECKING, Union
 import socket 
 import threading
 import json
@@ -7,7 +8,6 @@ import time
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
-    from SMPCSocket import SMPCSocket
 
 """
 Parses an adress such as:
