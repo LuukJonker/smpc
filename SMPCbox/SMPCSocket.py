@@ -7,6 +7,7 @@ import time
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
+    from SMPCSocket import SMPCSocket
 
 """
 Parses an adress such as:
@@ -34,7 +35,7 @@ class SMPCSocket ():
 
         # a buffer storing all received variables which have not been requested by the parrent class via
         # the receive variable function
-        self.received_variables: dict[str, dict[str, Any]] = {}
+        self.received_variables: dict[str | SMPCSocket, dict[str, Any]] = {}
         self.smpc_socket_in_use = True
         self.client_sockets = []
 
@@ -110,24 +111,24 @@ class SMPCSocket ():
         return None
         
 
-    def put_variables_in_buffer (self, sender_name: str, variable_names: list[str], values: list[Any]):
-        if not sender_name in self.received_variables.keys():
-            self.received_variables[sender_name] = {}
+    def put_variables_in_buffer (self, sender: str | SMPCSocket, variable_names: list[str], values: list[Any]):
+        if not sender in self.received_variables.keys():
+            self.received_variables[sender] = {}
         
         # add all the provided variables
         for var, val in zip(variable_names, values):
-            self.received_variables[sender_name][var] = val
+            self.received_variables[sender][var] = val
     
     """
     Stores a received_variables in the buffer
     """
-    def get_variable_from_buffer(self, sender_id: str, variable_name: str) -> Any:
+    def get_variable_from_buffer(self, sender: str | SMPCSocket, variable_name: str) -> Any:
         # check if this variable has been received from the specified sender
-        if not (sender_id in self.received_variables.keys() and variable_name in self.received_variables[sender_id].keys()):
+        if not (sender in self.received_variables.keys() and variable_name in self.received_variables[sender].keys()):
             return None
         
-        value = self.received_variables[sender_id][variable_name]
-        del self.received_variables[sender_id][variable_name]
+        value = self.received_variables[sender][variable_name]
+        del self.received_variables[sender][variable_name]
         return value
     
 
@@ -137,7 +138,7 @@ class SMPCSocket ():
     """
     def receive_variable(self, sender: 'ProtocolParty', variable_name: str, timeout: float = 10) -> Any:
         if self.simulated:
-            value = self.get_variable_from_buffer(str(hash(sender.socket)), variable_name)
+            value = self.get_variable_from_buffer(sender.socket, variable_name)
             if value == None:
                 raise Exception(f"The variable \"{variable_name}\" has not been received")
             return value
@@ -165,7 +166,7 @@ class SMPCSocket ():
         receiver_socket: 'SMPCSocket' = receiver.socket
         if self.simulated:
               # we simulate the socket by putting the variable in the buffer of received variables
-            receiver_socket.put_variables_in_buffer(str(hash(self)), variable_names, values)
+            receiver_socket.put_variables_in_buffer(self, variable_names, values)
         else: 
             # check for an existing connection
             dest_ip, dest_port = receiver_socket.get_address()
