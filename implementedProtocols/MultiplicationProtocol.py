@@ -1,13 +1,7 @@
 # implements the protocol from Gilboa1999 for multiplication
 
-# temporary for now to allow the import of the SMPCbox from the implementedProtocols
-# folder. Should remove once it is pip installable
-import sys
-sys.path.append('../')
-
 import time
 from SMPCbox import AbstractProtocol
-from SMPCbox.ProtocolParty import ProtocolParty
 from OT import OT
 import os
 
