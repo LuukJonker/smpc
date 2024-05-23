@@ -1,6 +1,8 @@
-from SMPCbox.ProtocolOpps import ProtocolOpperation
 from abc import ABC
 from typing import Type
+
+class ProtocolOpperation:
+    pass
 
 class ProtocolStep(ABC):
     """

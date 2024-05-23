@@ -2,13 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
 from SMPCbox.ProtocolStep import ProtocolStep
-from SMPCbox.ProtocolOpps import (
-    LocalComputation,
-    SendVariables,
-    AnnounceGlobals,
-    ProtocolSubroutine,
-)
-
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if type(var) == str else list(var)
@@ -157,8 +150,8 @@ class AbstractProtocol(ABC):
 
         # instantiate all the ProtocolParty classes with the default name of the role.
         # These might be overwritten if the user sets them later.
-        for role in self.get_party_roles():
-            self.parties[role] = ProtocolParty(role)
+        for role in self.get_party_names():
+            self.parties[role] = ProtocolParty()
 
     def set_protocol_visualiser(self, visualiser: AbstractProtocolVisualiser):
         """
@@ -168,9 +161,9 @@ class AbstractProtocol(ABC):
         self.visualiser = visualiser
 
     @abstractmethod
-    def get_party_roles(self) -> list[str]:
+    def get_party_names(self) -> list[str]:
         """
-        Returns an ordered list of the roles of each party
+        Returns an ordered list of the names of each party in the protocol
         For example for oblivious transfer the roles could be
         ["sender", "receiver"]
         The return of this function tels protocol users in which order to pass there
@@ -180,11 +173,11 @@ class AbstractProtocol(ABC):
 
     def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
         """
-        Sets the ProtocolParty classes, the dictionary should contain a mapping from every role specified by get_party_roles to a
+        Sets the ProtocolParty classes, the dictionary should contain a mapping from every name specified by get_party_names to a
         ProtocolParty instance.
 
         The use of this method is not mandatory, if the parties are never set then the protocol class automaticaly creates ProtocolParty
-        instances with the names of the roles in the protocol.
+        instances.
 
         Note that in the case that the protocol is run distributedly the party running localy should also be specified with the
         set_running_party method.
@@ -193,32 +186,26 @@ class AbstractProtocol(ABC):
         is lost once this method is called.
         """
 
-        party_names = set(party.name for party in role_assignments.values())
-        if len(party_names) != len(role_assignments.values()):
-            raise Exception(
-                "Make sure each ProtocolParty partaking in a protocol has a unique name!"
-            )
-
-        if set(role_assignments.keys()) != set(self.get_party_roles()):
+        if set(role_assignments.keys()) != set(self.get_party_names()):
             raise Exception(
                 "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
             )
         self.parties = role_assignments
 
-    def check_role_exists(self, role: str):
-        if role not in self.get_party_roles():
+    def check_name_exists(self, name: str):
+        if name not in self.get_party_names():
             raise Exception(
-                f'The role "{role}" does not exist in the protocol "{self.protocol_name}"'
+                f'The party name "{name}" does not exist in the protocol "{self.protocol_name}"'
             )
 
-    def set_running_party(self, role: str, party: ProtocolParty):
+    def set_running_party(self, name: str):
         """
         When running distributedly the party running locally should be set using this function.
         To do this a ProtocolParty instance must be provided and the role that the party should have must be specified.
         The available roles can be retrieved with the get_party_roles method.
         """
-        self.check_role_exists(role)
-        self.running_party = party.name
+        self.check_name_exists(name)
+        self.running_party = name
 
     def is_local_party(self, party: ProtocolParty) -> bool:
         """
@@ -226,7 +213,7 @@ class AbstractProtocol(ABC):
         This is the case if there is no runnning party set in which case all parties are simulated on this machine.
         Or if the given party is the running party
         """
-        return self.running_party == None or self.running_party == party.name
+        return self.running_party == None or self.running_party == self.get_name_of_party(party)
 
     def in_protocol_step(self):
         """
@@ -373,7 +360,7 @@ class AbstractProtocol(ABC):
         """
         expected_vars = self.get_expected_input()
         for role in inputs.keys():
-            self.check_role_exists(role)
+            self.check_name_exists(role)
 
             # check wether the inputs are provided correctly for each role
             if set(expected_vars[role]) != set(inputs[role].keys()):
@@ -405,7 +392,7 @@ class AbstractProtocol(ABC):
         """
         output = {}
         for role in self.output_variables().keys():
-            self.check_role_exists(role)
+            self.check_name_exists(role)
             if not self.is_local_party(self.parties[role]):
                 continue
             output[role] = {}
@@ -478,7 +465,7 @@ class AbstractProtocol(ABC):
         # used for visualisation
         input_var_mapping = {}
         for role in inputs.keys():
-            protocol.check_role_exists(role)
+            protocol.check_name_exists(role)
             party = role_assignments[role]
 
             if not self.is_local_party(party):
@@ -511,8 +498,8 @@ class AbstractProtocol(ABC):
         if self.running_party != None:
             # find what role the running_party has and set them as the running party in the subroutine protocol
             for role, party in role_assignments.items():
-                if self.running_party == party.name:
-                    protocol.set_running_party(role, party)
+                if self.running_party == self.get_name_of_party(party):
+                    protocol.set_running_party(role)
 
         # tell the visualiser we will be running a subroutine.
         self.visualiser.start_subroutine(
