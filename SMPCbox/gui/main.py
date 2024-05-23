@@ -172,7 +172,7 @@ class Protocolvisualiser(AbstractProtocolVisualiser):
     def __init__(self, protocol: AbstractProtocol):
         self.app = QApplication(sys.argv)
         self.protocol = protocol
-        self.party_names = self.protocol.get_party_roles()
+        self.party_names = self.protocol.get_party_names()
         self.gui = ui.MainWindow(self.party_names, self.one_step, self.run, self.reset)
         self.parties: dict[str, Client] = {
             party: Client(party) for party in self.party_names
