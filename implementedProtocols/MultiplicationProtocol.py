@@ -27,7 +27,7 @@ class SecretShareMultiplication(AbstractProtocol):
     def get_expected_input(self):
         return {"Alice": ["a"], "Bob": ["b"]}
 
-    def get_party_roles(self) -> list[str]:
+    def get_party_names(self) -> list[str]:
         return ["Alice", "Bob"]
 
     def output_variables(self) -> dict[str, list[str]]:

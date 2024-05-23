@@ -1,4 +1,4 @@
-from typing import Type, Any, Callable, Union
+from typing import Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
 from sys import getsizeof
@@ -24,15 +24,14 @@ class PartyStats():
         bytes_received: {self.bytes_received}"""
 
 class ProtocolParty ():
-    def __init__(self, name: str, address: str = "", is_listening_socket=True):
+    def __init__(self, address: str = "", is_listening_socket=True):
         """
         Instantiates a ProtocolParty. ProtocolParty instances are used within protocols, protocols themselfs
         instantiate ProtocolParty instances by default though when a user wants to assign a specific name
         to a certain party or wants to provide an address (ip:port) a party instance can also be provided
         to a protocol by using the set_protocol_parties or set_running_party methods of the protocol class.
         """
-        self.socket = SMPCSocket(name, address, is_listening_socket=is_listening_socket)
-        self.name = name
+        self.socket = SMPCSocket(address, is_listening_socket=is_listening_socket)
         self.__local_variables: dict[str, Any] = {}
         self.statistics = PartyStats()
 
@@ -84,7 +83,7 @@ class ProtocolParty ():
             del self.not_yet_received_vars[variable_name]
 
         if not variable_name in self.__local_variables.keys():
-            raise Exception(f"Trying to get non existend variable \"{variable_name}\" from the party \"{self.name}\"")
+            raise Exception(f"Trying to get non existend variable \"{variable_name}\"")
         
         return self.__local_variables[variable_name]
 
