@@ -115,7 +115,7 @@ class EmptyVisualiser(AbstractProtocolVisualiser):
     ):
         pass
 
-    def broadcast_variable(
+    def broadcast_variables(
         self, broadcasting_party_name: str, variables: dict[str, Any]
     ):
         pass
