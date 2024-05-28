@@ -1,8 +1,13 @@
+# temporary for now to allow the import of the SMPCbox from the implementedProtocols
+# folder. Should remove once it is pip installable
+import sys
+sys.path.append('../')
+
 import time
+import os
 from SMPCbox import AbstractProtocol, ProtocolParty
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
-import os
 
 
 def getRSAvars():
@@ -20,6 +25,8 @@ def getRSAvars():
     N = public_key.public_numbers().n
     return N, d, e
 
+def rand():
+    return int.from_bytes(os.urandom(16), byteorder='big')
 
 class OT(AbstractProtocol):
     protocol_name="ObliviousTransfer"
@@ -36,32 +43,44 @@ class OT(AbstractProtocol):
     def output_variables(self) -> dict[str, list[str]]:
         return {"Receiver": ["mb"]}
     
-    def __call__(self):
+    def Sender(self):
         sender = self.parties["Sender"]
         receiver = self.parties["Receiver"]
 
-        self.add_protocol_step("OT step")
-        self.compute(sender, ["N", "d", "e"], [], getRSAvars, "RSA()")
+        self.compute(sender, ["N", "d", "e"], getRSAvars(), "RSA()")
         self.send_variables(sender, receiver, ["N", "e"])
-        self.compute(sender, ["x0", "x1"], [], lambda: (int.from_bytes(os.urandom(16), byteorder='big'), int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
+        self.send_variables(sender, receiver, ["N", "e"])
+        self.compute(sender, ["x0", "x1"], (rand(), rand()), "rand()")
         self.send_variables(sender, receiver, ["x0", "x1"])
 
-        # Calculate v
-        self.compute(receiver, "k", [], lambda: (int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
-        self.compute(receiver, "x_b", ["b", "x0", "x1"], lambda b, x0, x1: x0 if (b == 0) else x1, "choose x_b")
-        self.compute(receiver, "v", ["x_b", "k", "e", "N"], lambda xb, k, e, N: ((xb + pow(k, e)) % N), "(x_b + k^e) mod N")
-        self.send_variables(receiver, sender, "v")
+        # receiver computes v
 
-        # calculate the encrypted m0 and m1
-        self.compute(sender, "k0", ["v", "x0", "d", "N"], lambda v, x, d, N: pow(v-x, d, N), "(v-x0)^d mod N")
-        self.compute(sender, "k1", ["v", "x1", "d", "N"], lambda v, x, d, N: pow(v-x, d, N), "(v-x1)^d mod N")
-        self.compute(sender, "m0_enc", ["m0", "k0", "N"], lambda m, k, N: ((m+k) % N), "(m0 + k0) mod N")
-        self.compute(sender, "m1_enc", ["m1", "k1", "N"], lambda m, k, N: ((m+k) % N), "(m1 + k1) mod N")
+        self.receive_variables(receiver, sender, "v")
+        self.compute(sender, "k0", pow(sender["v"]-sender["x0"], sender["d"], sender["N"]), "(v-x0)^d mod N")
+        self.compute(sender, "k1", pow(sender["v"]-sender["x1"], sender["d"], sender["N"]), "(v-x1)^d mod N")
+        self.compute(sender, "m0_enc", (sender["m0"]+sender["k0"]) % sender["N"], "(m0 + k0) mod N")
+        self.compute(sender, "m1_enc", (sender["m1"]+sender["k1"]) % sender["N"], "(m1 + k1) mod N")
         self.send_variables(sender, receiver, ["m0_enc", "m1_enc"])
 
-        self.compute(receiver, "mb_enc", ["b", "m0_enc", "m1_enc"], lambda b, m0, m1: (m0 if (b == 0) else m1), "choose m_b")
-        self.compute(receiver, "mb", ["mb_enc", "k", "N"], lambda mb, k, N: ((mb - k) % N), "(m'_b - k) mod N")
+    def Receiver(self):
+        sender = self.parties["Sender"]
+        receiver = self.parties["Receiver"]
 
+        self.receive_variables(sender, receiver, ["N", "d", "e", "x0", "x1"])
+        self.compute(receiver, "k", rand(), "rand()")
+        self.compute(receiver, "x_b", receiver["x0"] if (receiver["b"] == 0) else receiver["x1"], "choose x_b")
+        self.compute(receiver, "v", (receiver["x_b"] + pow(receiver["k"], receiver["e"])) % receiver["N"], "(x_b + k^e) mod N")
+        self.send_variables(receiver, sender, "v")
+
+        # sender calculates m0_enc, m1_enc
+
+        self.receive_variables(sender, receiver, ["m0_enc", "m1_enc"])
+        self.compute(receiver, "mb_enc", receiver["m0_enc"] if (receiver["b"] == 0) else receiver["m1_enc"], "choose m_b")
+        self.compute(receiver, "mb", (receiver["mb_enc"] - receiver["k"]) % receiver["N"], "(m'_b - k) mod N")
+
+    def execute_party(self, party_name: str):
+        self.add_protocol_step("Step")
+        self.run_party_method(party_name)
 
 if __name__ == "__main__":
     ot_protocol = OT()

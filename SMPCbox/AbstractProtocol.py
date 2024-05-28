@@ -1,3 +1,9 @@
+# temporary for now to allow the import of the SMPCbox from the implementedProtocols
+# folder. Should remove once it is pip installable
+import sys
+sys.path.append('../')
+import threading
+
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
@@ -18,8 +24,7 @@ class AbstractProtocolVisualiser(ABC):
         self,
         computing_party_name: str,
         computed_vars: dict[str, Any],
-        computation: str,
-        used_vars: dict[str, Any],
+        computation: str
     ):
         """
         This method visualises a computation.
@@ -27,7 +32,6 @@ class AbstractProtocolVisualiser(ABC):
             computing_party_name (str): The name of the party performing the computation.
             computed_vars (dict[str, Any]): A dictionary of all the (new) variables which have been computed and their values.
             computation (str): A string description of the computation.
-            used_vars (dict[str, Any]): A dictionary containing the names and values of all the local variables which were used in the computation.
         """
         pass
 
@@ -48,7 +52,7 @@ class AbstractProtocolVisualiser(ABC):
         pass
 
     @abstractmethod
-    def broadcast_variable(
+    def broadcast_variables(
         self, broadcasting_party_name: str, variables: dict[str, Any]
     ):
         """
@@ -103,7 +107,6 @@ class EmptyVisualiser(AbstractProtocolVisualiser):
         computing_party_name: str,
         computed_vars: dict[str, Any],
         computation: str,
-        used_vars: dict[str, Any],
     ):
         pass
 
@@ -237,8 +240,7 @@ class AbstractProtocol(ABC):
         self,
         computing_party: ProtocolParty,
         computed_vars: Union[str, list[str]],
-        input_vars: Union[str, list[str]],
-        computation: Callable,
+        computation: Any,
         description: str,
     ):
         """
@@ -246,7 +248,7 @@ class AbstractProtocol(ABC):
         party: party who should run the computation
         computed_vars: The name(s) of the new variable(s) in which to store the result from the computation. Can be str or a list of str when there are multiple results from the computation.
         input_vars: The variable(s) to use as input for the computation function. Can be a list of names or a single name string if only one argument is used.
-        computation: A lambda function/function pointer which takes in the input_vars and computes the computed_vars
+        computation: The computations output.
         description: A string describing what the computation does. This is used for protocol debugging and visualisation.
         """
 
@@ -260,7 +262,7 @@ class AbstractProtocol(ABC):
             return
 
         computing_party.run_computation(
-            computed_vars, input_vars, computation, description
+            computed_vars, computation, description
         )
 
         # Get the computed values
@@ -268,18 +270,45 @@ class AbstractProtocol(ABC):
         for name in computed_vars:
             computed_var_values[name] = computing_party.get_variable(name)
 
-        # Get the input values
-        input_var_values = {}
-        for name in input_vars:
-            input_var_values[name] = computing_party.get_variable(name)
-
         # add the local computation
         self.visualiser.add_computation(
             self.get_name_of_party(computing_party),
             computed_var_values,
-            description,
-            input_var_values,
-        )
+            description)
+
+    def run_party_method(self, party_name: str):
+        """
+        Can be used to give more structure to your protocol.
+        This method runs the the method with the name of the party.
+        Note that this means the class should have a method with a name corresponding to 
+        the string as the party_name.
+        """
+        try:
+            method = getattr(self, party_name)
+            method()
+        except AttributeError:
+            raise Exception(f"Protocol \"{self.protocol_name}\", has no method \"{party_name}\"")
+
+    def __call__(self):
+        """
+        Calls execute_party for each local party.
+        """
+        threads: list[threading.Thread] = []
+        for name, party in self.parties.items():
+            if self.is_local_party(party):
+                t = threading.Thread(target=self.execute_party, args=([name]))
+                threads.append(t)
+                t.start()
+        
+        [t.join() for t in threads]
+    
+    @abstractmethod
+    def execute_party(self, party_name: str):
+        """
+        This method should implement the instructions for each party. For the given party_name,
+        only the code for that party should be executed.
+        """
+        pass
 
     def add_protocol_step(self, step_name: str = ""):
         """
@@ -300,10 +329,10 @@ class AbstractProtocol(ABC):
         """
         Given the party which is sending the variables and the party receiving the variables this
         method handles the sending and receiving for both of the parties.
-        After a call to this method the send variables can be used in computations of the receiving_party
-
         Note that the variables argument can be both a single string and a list of strings in case more than one
-        variable is send
+        variable is send.
+
+        In addition to calling send_variables the user should also call receive variables as part of the code of the receiving party
         """
         # Verify the existence of a current protocol step
         self.in_protocol_step()
@@ -312,18 +341,11 @@ class AbstractProtocol(ABC):
         variables = convert_to_list(variables)
         variable_values = {}
 
-        # only call the send and receive methods on the parties if that party is running localy.
-        if self.is_local_party(sending_party):
-            sending_party.send_variables(receiving_party, variables)
-            for var in variables:
-                variable_values[var] = sending_party.get_variable(var)
+        sending_party.send_variables(receiving_party, variables)
+        for var in variables:
+            variable_values[var] = sending_party.get_variable(var)
 
-        if self.is_local_party(receiving_party):
-            receiving_party.receive_variables(sending_party, variables)
-            if not self.is_local_party(sending_party):
-                for var in variables:
-                    # The variable is posibly not received yet.
-                    variable_values[var] = None
+
 
         if not self.broadcasting:
             sending_party_name = self.get_name_of_party(sending_party)
@@ -331,13 +353,23 @@ class AbstractProtocol(ABC):
             self.visualiser.send_message(
                 sending_party_name, receiving_party_name, variable_values
             )
+    
+    def receive_variables(self,
+        sending_party: ProtocolParty,
+        receiving_party: ProtocolParty,
+        variables: Union[str, list[str]]):
+        """
+        This method should be called as part of the instructions for a party which is receiving variables.
+        """
 
-    @abstractmethod
-    def __call__(self):
-        """
-        A protocol must implement the __call__ method in which the protocol is run.
-        """
-        pass
+        variables = convert_to_list(variables)
+        variable_values = {}
+
+        receiving_party.receive_variables(sending_party, variables)
+        for var in variables:
+            # The variable is posibly not received yet.
+            variable_values[var] = None
+    
 
     @abstractmethod
     def get_expected_input(self) -> dict[str, list[str]]:
@@ -424,7 +456,7 @@ class AbstractProtocol(ABC):
 
         var_values = {var: broadcasting_party.get_variable(var) for var in variables}
 
-        self.visualiser.broadcast_variable(
+        self.visualiser.broadcast_variables(
             self.get_name_of_party(broadcasting_party), var_values
         )
 

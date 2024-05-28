@@ -138,27 +138,21 @@ class SMPCSocket ():
     """
     def receive_variable(self, sender: 'ProtocolParty', variable_name: str, timeout: float = 10) -> Any:
         if self.simulated:
-            value = self.get_variable_from_buffer(sender.socket, variable_name)
-            if value == None:
-                raise Exception(f"The variable \"{variable_name}\" has not been received")
-            return value
+            buffer_key = sender.socket
         else:
-            # we keep checking untill the listening socket has put the message into the queue
-            start_time = time.time()
-            while (time.time() - start_time < timeout):
-                sender_ip, sender_port = sender.socket.get_address()  
-                sender_addr = stringify_address(sender_ip, sender_port)
-                value = self.get_variable_from_buffer(sender_addr, variable_name)
-                if value != None:
-                    return value
-                
-                if self.ip == None:
-                    # no need to wait for network delay since were simulating it all
-                    break
-                time.sleep(0.1)
-    
-            raise Exception(f"The variable \"{variable_name}\" has not been received")
+            sender_ip, sender_port = sender.socket.get_address()  
+            buffer_key = stringify_address(sender_ip, sender_port)
 
+        start_time = time.time()
+        while (time.time() - start_time < timeout):
+            value = self.get_variable_from_buffer(buffer_key, variable_name)
+            if value != None:
+                return value
+    
+            time.sleep(0.1)
+        
+        raise Exception(f"The variable \"{variable_name}\" has not been received")
+        
     """
     This function sends the variable to this socket. 
     """

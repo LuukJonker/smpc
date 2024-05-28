@@ -60,6 +60,12 @@ class ProtocolParty ():
     
     def print_local_variables(self):
         print(self.__local_variables)
+
+    def __getitem__(self, key: str) -> Any:
+        """
+        Returns the value of the variable with the name of the given key.
+        """
+        return self.get_variable(key)
     
     def get_variable(self, variable_name: str):
         # handle the namespace
@@ -87,35 +93,26 @@ class ProtocolParty ():
         
         return self.__local_variables[variable_name]
 
-    def run_computation(self, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
-        # make sure the input vars and computed_vars are lists
-        input_vars = [input_vars] if type(input_vars) == str else input_vars
+    def run_computation(self, computed_vars: Union[str, list[str]], computation_res: Any, description: str):
+        # make sure the computed_vars are a list
         computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
 
-        # get the input values
-        input_vals = [self.get_variable(var) for var in input_vars]
 
         # add the namespace to the computed_var names
         computed_vars = [self.get_namespace() + name for name in computed_vars]
 
-        # get the local variables
-        t_start = time.time()
-        res = computation(*input_vals)
-        t_end = time.time()
-        self.statistics.execution_time += t_end - t_start
-
         # assign the output if there is just a single output variable
         if len(computed_vars) == 1:
-            self.__local_variables[computed_vars[0]] = res
+            self.__local_variables[computed_vars[0]] = computation_res
             return
         
         # check if enough values are returned 
-        if len(res) != len(computed_vars):
-            raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
+        if len(computation_res) != len(computed_vars):
+            raise Exception (f"The computation with description \"{description}\" returns {len(computation_res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
         
         # assign the values
         for i, var in enumerate(computed_vars):
-            self.__local_variables[var] = res[i]
+            self.__local_variables[var] = computation_res[i]
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
@@ -136,7 +133,6 @@ class ProtocolParty ():
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender
-        
         self.statistics.messages_received += 1
     
     def get_stats(self) -> PartyStats:
