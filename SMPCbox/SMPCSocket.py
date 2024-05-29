@@ -86,6 +86,30 @@ class SMPCSocket ():
         
         return self.ip, self.port
     
+    def connect_to_client(self, ip: str, port: int, timeout: float|None = 10):
+        new_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try: 
+            new_client.settimeout(timeout)
+            new_client.connect((ip, port))
+            new_client.settimeout(None)
+        except (socket.timeout, ConnectionRefusedError):
+            raise Exception(f"Client {ip}:{port} was not available to connect.")
+        
+        self.client_sockets.append(new_client)
+    
+    def connect_to_parties(self, other_parties: list[ProtocolParty]):
+        """
+        Establishes a connection with all the provided SMPCSocket
+        """
+        if self.simulated:
+            return
+        
+        # if we aren't simulated establish the connections
+        for party in other_parties:
+            ip, port = party.socket.get_address()
+            self.connect_to_client(ip, port)
+            
+    
     """
     Closes the socket,
     Note that this doesn't allow the imediate reuse of the port. Since

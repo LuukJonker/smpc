@@ -48,7 +48,7 @@ class AbstractProtocolVisualiser(ABC):
         pass
 
     @abstractmethod
-    def broadcast_variable(
+    def broadcast_variables(
         self, broadcasting_party_name: str, variables: dict[str, Any]
     ):
         """
@@ -207,6 +207,12 @@ class AbstractProtocol(ABC):
         self.check_name_exists(name)
         self.running_party = name
 
+        # ensure that the other parties are ready
+        listening_socket = self.parties[name].socket
+        other_parties: list[ProtocolParty] = list(self.parties.values())
+        other_parties.remove(self.parties[name])
+        listening_socket.connect_to_parties(other_parties)
+
     def is_local_party(self, party: ProtocolParty) -> bool:
         """
         A simple helper method which checks wether the provided party should perform its computations on this machine.
@@ -359,7 +365,7 @@ class AbstractProtocol(ABC):
         after a call to this method thus erases the input.
         """
         expected_vars = self.get_expected_input()
-        for role in inputs.keys():
+        for role in expected_vars.keys():
             self.check_name_exists(role)
 
             # check wether the inputs are provided correctly for each role
@@ -424,7 +430,7 @@ class AbstractProtocol(ABC):
 
         var_values = {var: broadcasting_party.get_variable(var) for var in variables}
 
-        self.visualiser.broadcast_variable(
+        self.visualiser.broadcast_variables(
             self.get_name_of_party(broadcasting_party), var_values
         )
 
