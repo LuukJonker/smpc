@@ -4,7 +4,8 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QColor
 import sys
 from SMPCbox.AbstractProtocol import AbstractProtocol, AbstractProtocolVisualiser
-from SMPCbox.ProtocolCompiler import CompiledProtocol, Client
+from SMPCbox.ProtocolCompiler import CompiledProtocol, Step
+from SMPCbox.ProtocolParty import ProtocolParty
 
 
 class Protocolvisualiser(AbstractProtocolVisualiser):
@@ -17,9 +18,11 @@ class Protocolvisualiser(AbstractProtocolVisualiser):
         self.party_names: list[str] = []
         self.gui = ui.MainWindow(self.party_names, self.one_step, self.run, self.reset)
         self.gui.protocol_chooser.currentIndexChanged.connect(self.protocol_changed)
-        self.parties: dict[str, Client] = {
-            party: Client(party) for party in self.party_names
+        self.parties: dict[str, ProtocolParty] = {
+            party: ProtocolParty(party) for party in self.party_names
         }
+
+        self.steps: list[Step] = []
 
         self.step_index = 0
 
@@ -27,15 +30,19 @@ class Protocolvisualiser(AbstractProtocolVisualiser):
         if self.protocol is None:
             return
 
+        self.gui.set_protocol_name(self.protocol.protocol_name)
+        self.party_names = self.protocol.get_party_roles()
+        self.parties = {party: ProtocolParty(party) for party in self.party_names}
+        self.gui.update_party_names(self.party_names)
+        inp = self.protocol.get_expected_input()
+
         self.gui.list_widget.clear()
 
         self.compiled_protocol = self.protocol.compile()
+        self.steps = self.compiled_protocol.steps
+        for step in self.steps:
+            step.create_widget(self.gui)
 
-        # self.gui.set_protocol_name(self.protocol.protocol_name)
-        # self.party_names = self.protocol.get_party_roles()
-        # self.parties = {party: Client(party) for party in self.party_names}
-        # self.gui.update_party_names(self.party_names)
-        # inp = self.protocol.get_expected_input()
 
         # inputs: list[list[str]] = []
         # for expected_vars in inp.values():
@@ -68,26 +75,27 @@ class Protocolvisualiser(AbstractProtocolVisualiser):
 
     def one_step(self):
         if self.step_index < len(self.steps):
-            # Change the background color of the current step
-            item = self.gui.list_widget.item(self.step_index)
-            if item:
-                item.setBackground(QColor(155, 155, 133))
-            res = self.steps[self.step_index].handle(list(self.parties.values()))
-            self.steps[self.step_index].display_result(res)
-            self.step_index += 1
+            for i, step in enumerate(self.steps):
+                # Change the background color of the current step
+                item = self.gui.list_widget.item(self.step_index)
+                if item:
+                    item.setBackground(QColor(155, 155, 133))
+
+                if step is not None:
+                    parties = list(self.parties.values())
+                    res = step.handle(parties)
+
+                self.step_index += 1
 
     def run(self):
         for step in self.steps[self.step_index :]:
-            res = step.handle(list(self.parties.values()))
+            parties = list(self.parties.values())
+            res = step.handle(parties)
             step.display_result(res)
 
         self.step_index = len(self.steps)
 
     def reset(self):
-        for party in self.parties.values():
-            party.steps = []
-            party.vars = {}
-
         for step in self.steps:
             step.widget.reset()
 

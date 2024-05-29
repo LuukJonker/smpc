@@ -344,7 +344,7 @@ class SubroutineWidget(QWidget):
         print("Widget clicked")
 
 
-class StepWidget(QWidget):
+class CommentWidget(QWidget):
     def __init__(self, step_name: str):
         super().__init__()
 
@@ -542,11 +542,13 @@ class MainWindow(QMainWindow):
         self.num_parties = len(parties)
         self.party_indexes = {party: 0 for party in parties}
 
-    def add_step(self, step_name: str) -> StepWidget:
-        widget = StepWidget(step_name)
+    def add_comment(self, comment: str) -> CommentWidget:
+        widget = CommentWidget(comment)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
 
         return widget
 

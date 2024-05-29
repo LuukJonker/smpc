@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QWidget
 from typing import Any, Callable
 import re
 from SMPCbox.ProtocolParty import ProtocolParty
+from SMPCbox.gui.ui import MainWindow
 
 
 def replace_variables(expression: str, variables: dict[str, Any]):
@@ -21,27 +22,13 @@ def replace_variables(expression: str, variables: dict[str, Any]):
     return result
 
 
-class Client:
-    def __init__(self, name: str):
-        self.party = ProtocolParty(name)
-        self.steps: list["Step"] = []
-        self.vars: dict[str, Any] = {}
-
-    def add_step(self, step: "Step"):
-        self.steps.append(step)
-
-    @property
-    def name(self):
-        return self.party.name
-
-
 class StepType(Enum):
-    SEND = 1
-    RECV = 2
+    SENDRECV = 1
     COMPUTATION = 3
     SUBROUTINE = 4
     BROADCAST = 5
     INPUT = 6
+    COMMENT = 7
 
 
 class Step(ABC):
@@ -57,16 +44,20 @@ class Step(ABC):
         pass
 
     @abstractmethod
-    def handle(self, yourself: Client, all: list[Client]) -> str:
+    def handle(self, all: list[ProtocolParty]) -> str:
         pass
 
     @abstractmethod
-    def display_result(self, res: list):
+    def display_result(self, res: list[str]):
+        pass
+
+    @abstractmethod
+    def create_widget(self, gui: MainWindow):
         pass
 
     def figureType(self) -> StepType:
-        if isinstance(self, Send):
-            return StepType.SEND
+        if isinstance(self, SendReceive):
+            return StepType.SENDRECV
         elif isinstance(self, Computation):
             return StepType.COMPUTATION
         elif isinstance(self, Subroutine):
@@ -75,6 +66,8 @@ class Step(ABC):
             return StepType.BROADCAST
         elif isinstance(self, Input):
             return StepType.INPUT
+        elif isinstance(self, Comment):
+            return StepType.COMMENT
         else:
             raise ValueError("Unknown step type")
 
@@ -87,53 +80,75 @@ class Comment(Step):
     def __str__(self) -> str:
         return self.comment
 
-    def handle(self, yourself: Client, all: list[Client]):
+    def handle(self, all: list[ProtocolParty]):
         return ""
 
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+    def create_widget(self, gui: MainWindow):
+        self.widget = gui.add_comment(self.comment)
 
-class Send(Step):
-    def __init__(self, receiver: Client, vars: list[str]):
+
+class Input(Step):
+    def __init__(self, var_names: list[str], var_types: list[type]):
         super().__init__()
+        self.var_names = var_names
+        self.var_types = var_types
+
+    def __str__(self) -> str:
+        return str(self.var_names)
+
+    def handle(self, all: list[ProtocolParty]):
+        inputs: list[Any] = self.widget.get_inputs()
+        for var_name, (i, party) in zip(self.var_names, enumerate(all)):
+            party.set_local_variable(var_name, self.var_types[i](inputs[i]))
+
+        return ""
+
+    def display_result(self, res: list[str]):
+        """Input does not display any result."""
+        pass
+
+    def create_widget(self, gui: MainWindow):
+        self.widget = gui.add_input_step(self.var_names)
+
+class SendReceive(Step):
+    def __init__(self, sender: ProtocolParty, receiver: ProtocolParty, vars: list[str]):
+        super().__init__()
+        self.sender = sender
         self.receiver = receiver
         self.vars = vars
 
     def __str__(self) -> str:
         return str(self.vars)
 
-    def handle(self, yourself: Client, all: list[Client]):
-        yourself.party.send_variables(self.receiver.party, self.vars)
+    def handle(self, all: list[ProtocolParty]):
+        self.sender.send_variables(self.receiver, self.vars)
+        self.receiver.receive_variables(self.sender, self.vars)
         for var in self.vars:
-            self.receiver.vars[var] = yourself.vars[var]
+            self.receiver.set_local_variable(var, self.sender.get_variable(var))
 
-        return str([self.receiver.vars[v] for v in self.vars])
-
-    def display_result(self, res: list[str]):
-        self.widget.display_result(res)
-
-
-class Receive(Step):
-    def __init__(self, sender: Client, vars: list[str]):
-        super().__init__()
-        self.sender = sender
-        self.vars = vars
-
-    def __str__(self) -> str:
-        return str(self.vars)
-
-    def handle(self, yourself: Client, all: list[Client]):
-        yourself.party.receive_variables(self.sender.party, self.vars)
-        return str([self.sender.vars[v] for v in self.vars])
+        return str([self.receiver.get_variable(v) for v in self.vars])
 
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+    def create_widget(self, gui: MainWindow):
+        self.widget = gui.add_send_step(self.sender.name, self.receiver.name, self.vars, self.vars)
 
-class Computation(Step):
-    def __init__(self, input_vars: list[str], computed_vars: list[str], computation: Callable, computation_desc: str):
+
+class SingleComputation:
+    def __init__(
+        self,
+        party: ProtocolParty,
+        input_vars: list[str],
+        computed_vars: list[str],
+        computation: Callable,
+        computation_desc: str,
+    ):
         super().__init__()
+        self.party = party
         self.input_vars = input_vars
         self.computed_vars = computed_vars
 
@@ -143,19 +158,55 @@ class Computation(Step):
     def __str__(self) -> str:
         return f"{self.input_vars} = {self.computation_desc}"
 
-    def handle(self, yourself: Client, all: list[Client]):
-        res = yourself.party.run_computation(
+    def compute(self):
+        res = self.party.run_computation(
             self.computed_vars, self.input_vars, self.computation, self.computation_desc
         )
 
         return f"{self.computed_vars} = {res}"
 
+
+class Computation(Step):
+    def __init__(self):
+        super().__init__()
+
+        self.all_computations: dict[str, SingleComputation] = {}
+
+    def add_computation(
+        self,
+        party: ProtocolParty,
+        input_vars: list[str],
+        computed_vars: list[str],
+        computation: Callable,
+        computation_desc: str,
+    ):
+        self.all_computations[party.name] = SingleComputation(
+            party, input_vars, computed_vars, computation, computation_desc
+        )
+
+    def __str__(self):  # type: ignore
+        return str([str(comp) for comp in self.all_computations.values()])
+
+    def handle(self, all: list[ProtocolParty]) -> list[str]:  # type: ignore
+        res = []
+        for party in all:
+            res.append(self.all_computations[party.name].compute())
+
+        return res
+
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+    def create_widget(self, gui: MainWindow):
+        for comp in self.all_computations.values():
+            comp_widget = gui.add_computation_step(
+                comp.party.name, comp.computation_desc
+            )
+            self.widget = comp_widget
+
 
 class Broadcast(Step):
-    def __init__(self, party: Client, vars: list[str]):
+    def __init__(self, party: ProtocolParty, vars: list[str]):
         super().__init__()
         self.party = party
         self.vars = vars
@@ -163,29 +214,30 @@ class Broadcast(Step):
     def __str__(self) -> str:
         return f"Broadcast by {self.party.name}\n{str(self.vars)}"
 
-    def handle(self, yourself: Client, all: list[Client]):
-        for client in all:
-            if client == yourself:
+    def handle(self, all: list[ProtocolParty]):
+        for party in all:
+            if party == self.party:
                 continue
 
-            yourself.party.send_variables(client.party, self.vars)
-            client.party.receive_variables(yourself.party, self.vars)
+            self.party.send_variables(party, self.vars)
+            party.receive_variables(self.party, self.vars)
 
             for var in self.vars:
-                client.vars[var] = yourself.vars[var]
+                party.set_local_variable(var, self.party.get_variable(var))
 
-        return str([yourself.vars[v] for v in self.vars])
+        return str([self.party.get_variable(v) for v in self.vars])
 
     def display_result(self, res: list[str]):
         self.widget.display_result(res)
 
+    def create_widget(self, gui: MainWindow):
+        self.widget = gui.add_broadcast(self.party.name, self.vars)
+
 
 class Subroutine(Step):
-    from SMPCbox.AbstractProtocol import AbstractProtocol
-
     def __init__(
         self,
-        protocol_class: type[AbstractProtocol],
+        protocol_class: type,
         role_assignments: dict[str, ProtocolParty],
         inputs: dict[str, dict[str, str]],
         output_vars: dict[str, dict[str, str]],
@@ -196,15 +248,10 @@ class Subroutine(Step):
         self.inputs = inputs
         self.output_vars = output_vars
 
-        self.leader = True
-
     def __str__(self) -> str:
         return f"Subroutine {self.protocol_class.__name__}"
 
-    def handle(self, yourself: Client, all: list[Client], running_local: bool = True):
-        if not self.leader:
-            return ""
-
+    def handle(self, all: list[ProtocolParty], running_local: bool = True):
         protocol = self.protocol_class()
         protocol.set_protocol_parties(self.role_assignments)
 
@@ -273,45 +320,35 @@ class Subroutine(Step):
         """Subroutine does not display any result."""
         pass
 
-
-class Input(Step):
-    def __init__(self, var_names: list[str], var_type: type):
-        super().__init__()
-        self.var_names = var_names
-        self.var_type = var_type
-
-    def __str__(self) -> str:
-        return str(self.var_names)
-
-    def handle(self, yourself: Client, all: list[Client]):
-        inputs: list[Any] = self.widget.get_inputs()
-        for var_name, (i, client) in zip(self.var_names, enumerate(all)):
-            client.vars[var_name] = self.var_type(inputs[i])
-
-        return ""
-
-    def display_result(self, res: list[str]):
-        """Input does not display any result."""
-        pass
+    def create_widget(self, gui: MainWindow):
+        self.widget = gui.add_subroutine_step(
+            self.protocol_class.__name__,
+            [party.name for party in self.role_assignments.values()],
+        )
 
 
 class CompiledProtocol:
-    from SMPCbox.AbstractProtocol import AbstractProtocol
-
     def __init__(self, parties: list[str]) -> None:
-        self.clients = {party: Client(party) for party in parties}
+        self.parties = {party: ProtocolParty(party) for party in parties}
+        self.steps: list[Step] = []
         self.input = {}
         self.output = {}
 
+        self.indexes = {name: 0 for name in self.parties.keys()}
+
+    def add_step(self, step: Step):
+        self.steps.append(step)
+
     def add_comment(self, comment: str):
-        for client in self.clients.values():
-            client.add_step(Comment(comment))
+        self.add_step(Comment(comment))
+        self.update_all_indexes()
 
     def add_send_receive(self, sender: str, receiver: str, vars: list[str]):
-        sender_client = self.clients[sender]
-        receiver_client = self.clients[receiver]
-        sender_client.add_step(Send(receiver_client, vars))
-        receiver_client.add_step(Receive(sender_client, vars))
+        sender_party = self.parties[sender]
+        receiver_party = self.parties[receiver]
+        self.add_step(SendReceive(sender_party, receiver_party, vars))
+
+        self.update_all_indexes()
 
     def add_computation(
         self,
@@ -321,64 +358,50 @@ class CompiledProtocol:
         computation: Callable,
         computation_desc: str,
     ):
-        self.clients[party].add_step(Computation(input_vars, computed_vars, computation, computation_desc))
+        index = self.indexes[party]
+
+        if index >= len(self.steps):
+            comp = Computation()
+            comp.add_computation(
+                self.parties[party],
+                input_vars,
+                computed_vars,
+                computation,
+                computation_desc,
+            )
+            self.add_step(comp)
+        else:
+            step = self.steps[index]
+            if not isinstance(step, Computation):
+                raise ValueError(
+                    f"Expected computation step at index {index}, but got {step}"
+                )
+
+            step.add_computation(
+                self.parties[party],
+                input_vars,
+                computed_vars,
+                computation,
+                computation_desc,
+            )
+
+        self.indexes[party] += 1
 
     def add_broadcast(self, party: str, vars: list[str]):
-        self.clients[party].add_step(Broadcast(self.clients[party], vars))
+        self.add_step(Broadcast(self.parties[party], vars))
+        self.update_all_indexes()
 
     def add_subroutine(
         self,
-        protocol_class: type[AbstractProtocol],
+        protocol_class: type,
         role_assignments: dict[str, ProtocolParty],
         inputs: dict[str, dict[str, str]],
         output_vars: dict[str, dict[str, str]],
     ):
-        for i, client in enumerate(role_assignments.values()):
-            step = Subroutine(protocol_class, role_assignments, inputs, output_vars)
+        self.add_step(Subroutine(protocol_class, role_assignments, inputs, output_vars))
+        self.update_all_indexes()
 
-            # Only the first party is the leader
-            if i == 0:
-                step.leader = True
-            else:
-                step.leader = False
-
-            self.clients[client.name].add_step(step)
-
-
-    def finalize(self):
-        done = [False] * len(self.clients)
-        indexes = {name: 0 for name in self.clients.keys()}
-
-        while not all(done):
-            current_steps = []
-            should_increment = [False] * len(self.clients)
-
-            for i, client in enumerate(self.clients.values()):
-                if done[i]:
-                    current_steps.append(None)
-                    continue
-
-                step = client.steps[indexes[client.name]]
-
-                if isinstance(step, Subroutine):
-                    participants = [party.name for party in step.role_assignments.values()]
-                    if not all([isinstance(self.clients[party].steps[indexes[party]], Subroutine) for party in participants]):
-                        continue
-
-                elif isinstance(step, Send):
-
-
-
-
-
-                current_steps.append(step)
-
-                should_increment[i] = True
-
-                if indexes[client.name] == len(client.steps):
-                    done[i] = True
-
-            for i, client in enumerate(self.clients.values()):
-                if should_increment[i]:
-                    indexes[client.name] += 1
-
+    def update_all_indexes(self):
+        highest_index = max(self.indexes.values())
+        for party in self.indexes:
+            self.indexes[party] = highest_index + 1
