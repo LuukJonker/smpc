@@ -7,8 +7,8 @@ import time
 if __name__ == "__main__":
     ot_protocol = OT()
 
-    sender = ProtocolParty(address="127.0.0.1:4841", is_listening_socket=False)
-    receiver = ProtocolParty(address="127.0.0.1:4840")
+    sender = ProtocolParty(address="127.0.0.1:4856", is_listening_socket=False)
+    receiver = ProtocolParty(address="127.0.0.1:4865")
     # time.sleep(5)
     ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
     ot_protocol.set_running_party("Receiver")

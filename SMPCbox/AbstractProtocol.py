@@ -365,7 +365,7 @@ class AbstractProtocol(ABC):
         after a call to this method thus erases the input.
         """
         expected_vars = self.get_expected_input()
-        for role in expected_vars.keys():
+        for role in inputs.keys():
             self.check_name_exists(role)
 
             # check wether the inputs are provided correctly for each role
