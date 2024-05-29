@@ -10,15 +10,29 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QHBoxLayout,
     QLineEdit,
+    QComboBox,
 )
-from PyQt5.QtCore import Qt, QPoint, QSize
-from PyQt5.QtGui import QPainter, QPen, QColor
+from PyQt5.QtCore import Qt, QPoint, QSize, QEvent
+from PyQt5 import QtCore
+from PyQt5.QtGui import QPainter, QPen, QColor, QCursor
 import math
 
 
 class Section(QWidget):
-    def __init__(self, text: str, extra_text: str = "", background_color="lightblue", border_color="blue"):
+    def __init__(
+        self,
+        text: str,
+        extra_text: str = "",
+        background_color="lightblue",
+        border_color="blue",
+    ):
         super().__init__()
+
+        self.text = text
+        self.extra_text = extra_text
+        self.background_color = background_color
+        self.border_color = border_color
+
         self.setStyleSheet(
             f"""
             QFrame {{background-color: {background_color}; border: 2px solid {border_color}; border-radius: 5px;}}
@@ -32,9 +46,9 @@ class Section(QWidget):
 
         self.frame = QFrame()
         self.label1 = QLabel(text)
-        self.label1.setAlignment(Qt.AlignCenter) # type: ignore
+        self.label1.setAlignment(Qt.AlignCenter)  # type: ignore
         self.label2 = QLabel("")
-        self.label2.setAlignment(Qt.AlignCenter) # type: ignore
+        self.label2.setAlignment(Qt.AlignCenter)  # type: ignore
         layout.addWidget(self.label1)
 
         if extra_text:
@@ -57,18 +71,33 @@ class Section(QWidget):
         self.setLayout(frame_layout)
 
     def add_computation(self, text):
+        self.extra_text = text
         self.label2.setText(text)
+
+    def disappear(self):
+        self.setStyleSheet("")
+
+    def reappear(self):
+        self.setStyleSheet(
+            f"""
+            QFrame {{background-color: {self.background_color}; border: 2px solid {self.border_color}; border-radius: 5px;}}
+            QLabel {{border: none; border-radius: 0px; text-align: center;}}
+            """
+        )
 
 
 class Input(QWidget):
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, background_color="lightgrey", border_color="grey"):
         super().__init__()
         self.setStyleSheet(
-            """
-            QFrame {background-color: lightgrey; border: 2px solid grey; border-radius: 5px;}
-            QLabel {border: none; border-radius: 0px; text-align: center;}
+            f"""
+            QFrame {{background-color: {background_color}; border: 2px solid {border_color}; border-radius: 5px;}}
+            QLabel {{border: none; border-radius: 0px; text-align: center;}}
             """
         )
+
+        if prompt == "":
+            self.setStyleSheet("opacity: 0; color: white; border: none; background-color: none;")
 
         layout = QHBoxLayout()
 
@@ -89,7 +118,7 @@ class Input(QWidget):
 
 
 class CalculationWidget(QWidget):
-    def __init__(self, num_columns: int, calculation: str):
+    def __init__(self, calculations: list[str]):
         super().__init__()
 
         layout = QGridLayout()
@@ -97,9 +126,12 @@ class CalculationWidget(QWidget):
         layout.setHorizontalSpacing(50)  # Add horizontal spacing between columns
         layout.setVerticalSpacing(10)  # Add vertical spacing between rows
 
-        self.sections = [Section(calculation) for _ in range(num_columns)]
+        self.sections = [Section(calculation) for calculation in calculations]
         for i, column in enumerate(self.sections):
             layout.addWidget(column, 0, i)
+
+            if column.label1.text() == "":
+                column.disappear()
 
         self.setLayout(layout)
 
@@ -110,6 +142,10 @@ class CalculationWidget(QWidget):
     def reset(self):
         for section in self.sections:
             section.label2.setText("")
+
+    def update_calculation(self, index: int, calculation: str):
+        self.sections[index].label1.setText(calculation)
+        self.sections[index].reappear()
 
 
 class SendReceiveWidget(QWidget):
@@ -135,10 +171,14 @@ class SendReceiveWidget(QWidget):
                 )
 
         self.send_section = Section(
-            f"""Send\n{str(from_variables).replace("'", "")}""", background_color="lightgreen", border_color="green"
+            f"""Send\n{str(from_variables).replace("'", "")}""",
+            background_color="lightgreen",
+            border_color="green",
         )
         self.receive_section = Section(
-            f"""Receive\n{str(to_variables).replace("'", "")}""", background_color="lightcoral", border_color="red"
+            f"""Receive\n{str(to_variables).replace("'", "")}""",
+            background_color="lightcoral",
+            border_color="red",
         )
         layout.addWidget(self.send_section, 0, sender)
         layout.addWidget(self.receive_section, 0, receiver)
@@ -223,8 +263,118 @@ class BroadcastWidget(QWidget):
         self.section.label2.setText("")
 
 
+class SubroutineWidget(QWidget):
+    def __init__(self, subroutine_name: str, clients: list[str]):
+        super().__init__()
+
+        self.setStyleSheet(
+            """
+            QFrame { background-color: #9370DB; border: 2px solid #8A2BE2; border-radius: 5px; color: white; }
+            QLabel { border: none; border-radius: 0px; text-align: center; }
+
+            """
+        )
+
+        root_layout = QVBoxLayout()
+
+        root_frame = QFrame()
+
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
+        main_layout.setSpacing(20)  # Add spacing between elements
+
+        main_layout.addWidget(QLabel(subroutine_name))
+
+        grid_frame = QFrame()
+
+        grid_frame.setStyleSheet(
+            """
+            QFrame { background-color: none; border: none; color: white; }
+            """
+        )
+
+        grid_layout = QGridLayout()
+        grid_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
+        grid_layout.setSpacing(20)  # Add spacing between elements
+
+        self.sections = []
+
+        for i, client in enumerate(clients):
+            if client:
+                section = Section(
+                    f"{client}",
+                    background_color="#7B68EE",
+                    border_color="none",
+                )
+            else:
+                section = Section(
+                    "",
+                    background_color="none",
+                    border_color="none",
+                )
+                section.disappear()
+
+            self.sections.append(section)
+            grid_layout.addWidget(section, 0, i)
+
+        grid_frame.setLayout(grid_layout)
+
+        root_frame.setLayout(main_layout)
+        root_layout.addWidget(root_frame)
+
+        main_layout.addWidget(grid_frame)
+
+        self.setLayout(root_layout)
+
+    def display_result(self, results: list[str]):
+        self.section.label2.setText(str(results).replace("'", ""))
+
+    def reset(self):
+        self.section.label2.setText("")
+
+    def eventFilter(self, a0, a1):
+        obj, event = a0, a1
+
+        if event and event.type() == QEvent.MouseButtonPress:  # type: ignore
+            self.on_click()
+            return True
+        return super().eventFilter(obj, event)
+
+    def on_click(self):
+        print("Widget clicked")
+
+
+class StepWidget(QWidget):
+    def __init__(self, step_name: str):
+        super().__init__()
+
+        self.setStyleSheet(
+            """
+            QWidget {background-color: lightgrey; border: 2px solid grey; border-radius: 5px;}
+            """
+        )
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
+        layout.setSpacing(20)  # Add spacing between elements
+
+        # Set label in the middle of the widget
+        self.section = QLabel(step_name)
+        self.section.setAlignment(Qt.AlignCenter)  # type: ignore
+
+        layout.addWidget(self.section)
+
+        self.setLayout(layout)
+
+    def display_result(self, results: list[str]):
+        self.section.label2.setText(str(results).replace("'", ""))
+
+    def reset(self):
+        self.section.label2.setText("")
+
+
 class InputWidget(QWidget):
-    def __init__(self, num_columns: int, inputs: list[str]):
+    def __init__(self, inputs: list[str]):
         super().__init__()
 
         layout = QGridLayout()
@@ -232,18 +382,108 @@ class InputWidget(QWidget):
         layout.setHorizontalSpacing(100)  # Add horizontal spacing between columns
         layout.setVerticalSpacing(10)  # Add vertical spacing between rows
 
-        self.inputs = [Input(inputs[i]) for i in range(num_columns)]
+        self.inputs = [
+            (
+                Input(input)
+                if input
+                else Input("")
+            )
+            for input in inputs
+        ]
         for i, input in enumerate(self.inputs):
             layout.addWidget(input, 0, i)
 
         self.setLayout(layout)
 
     def get_inputs(self):
-        return [input.get_input() for input in self.inputs]
+        return [input.get_input() if input else None for input in self.inputs]
 
     def reset(self):
         for input in self.inputs:
-            input.input.setText("")
+            if input:
+                input.input.setText("")
+
+
+class StyledButton(QPushButton):
+    def __init__(self, text: str, parent=None, color_scheme="blue"):
+        super().__init__(text, parent)
+        self.color_scheme = color_scheme
+        self.setStyleSheet(self.get_button_style())
+        self.setCursor(QCursor(QtCore.Qt.PointingHandCursor))  # type: ignore
+
+    def get_button_style(self):
+        color_schemes = {
+            "blue": {
+                "background": "#1E90FF",
+                "hover": "#1C86EE",
+                "pressed": "#1874CD",
+                "disabled": "#87CEFA",
+                "text": "white",
+            },
+            "green": {
+                "background": "#32CD32",
+                "hover": "#2E8B57",
+                "pressed": "#228B22",
+                "disabled": "#98FB98",
+                "text": "white",
+            },
+            "red": {
+                "background": "#FF6347",
+                "hover": "#FF4500",
+                "pressed": "#CD5C5C",
+                "disabled": "#FFA07A",
+                "text": "white",
+            },
+            "purple": {
+                "background": "#9370DB",
+                "hover": "#8A2BE2",
+                "pressed": "#7B68EE",
+                "disabled": "#DDA0DD",
+                "text": "white",
+            },
+        }
+
+        scheme = color_schemes[self.color_scheme]
+
+        return f"""
+        QPushButton {{
+            background-color: {scheme["background"]};
+            border: none;
+            color: {scheme["text"]};
+            padding: 10px 32px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 16px;
+            margin: 4px 2px;
+            border-radius: 8px;
+        }}
+        QPushButton:disabled {{
+            background-color: {scheme["disabled"]};
+        }}
+        QPushButton:hover {{
+            background-color: {scheme["hover"]};
+        }}
+        QPushButton:pressed {{
+            background-color: {scheme["pressed"]};
+        }}
+        """
+
+
+class NoHighlightListWidget(QListWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.setStyleSheet("""
+            QListWidget::item {
+                background: transparent;
+                border: none;
+                color: black;
+            }
+            QListWidget::item:selected {
+                background: transparent;
+                color: black;
+            }
+        """)
 
 
 class MainWindow(QMainWindow):
@@ -253,7 +493,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("SMPC Visualiser")
 
-        self.resize(1000, 655)
+        self.resize(1000, 800)
+
+        self.protocol_chooser = QComboBox()
 
         self.client_frame = QFrame()
         client_layout = QGridLayout()
@@ -261,13 +503,14 @@ class MainWindow(QMainWindow):
             client_layout.addWidget(QLabel(party), 0, i)
         self.client_frame.setLayout(client_layout)
 
-        self.list_widget = QListWidget()
+        self.list_widget = NoHighlightListWidget()
 
-        self.one_step_button = QPushButton("One step")
-        self.run_button = QPushButton("Run")
-        self.reset_button = QPushButton("Reset")
+        self.one_step_button = StyledButton("One step", color_scheme="green")
+        self.run_button = StyledButton("Run", color_scheme="blue")
+        self.reset_button = StyledButton("Reset", color_scheme="red")
 
         layout = QVBoxLayout()
+        layout.addWidget(self.protocol_chooser)
         layout.addWidget(self.client_frame)
         layout.addWidget(self.list_widget)
         layout.addWidget(self.one_step_button)
@@ -285,18 +528,56 @@ class MainWindow(QMainWindow):
         self.run_button.clicked.connect(run_callback)
         self.reset_button.clicked.connect(reset_callback)
 
-    def add_input_step(self, prompt: str) -> InputWidget:
-        widget = InputWidget(self.num_parties, [prompt] * self.num_parties)
+        self.party_indexes = {party: 0 for party in parties}
+
+    def set_protocol_name(self, protocol_name: str):
+        self.setWindowTitle(f"{protocol_name} - SMPC Visualiser")
+
+    def update_party_names(self, parties: list[str]):
+        client_layout = QGridLayout()
+        for i, party in enumerate(parties):
+            client_layout.addWidget(QLabel(party), 0, i)
+        self.client_frame.setLayout(client_layout)
+
+        self.num_parties = len(parties)
+        self.party_indexes = {party: 0 for party in parties}
+
+    def add_step(self, step_name: str) -> StepWidget:
+        widget = StepWidget(step_name)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
+
         return widget
 
-    def add_computation_step(self, calculation: str):
-        widget = CalculationWidget(self.num_parties, calculation)
+    def add_input_step(self, prompts: list[str]) -> InputWidget:
+        widget = InputWidget(prompts)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
+        return widget
+
+    def add_computation_step(self, party_name: str, calculation: str):
+        index = self.party_indexes[party_name]
+
+        item = self.list_widget.item(index)
+        widget = self.list_widget.itemWidget(item)
+
+        if widget is None:
+            calculations = ["" for _ in range(self.num_parties)]
+            calculations[self.get_party_index(party_name)] = calculation
+            widget = CalculationWidget(calculations)
+            list_item = QListWidgetItem(self.list_widget)
+            list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
+            self.list_widget.setItemWidget(list_item, widget)
+        else:
+            widget.update_calculation(self.get_party_index(party_name), calculation)
+
+        self.party_indexes[party_name] += 1
+
         return widget
 
     def add_send_step(
@@ -312,6 +593,9 @@ class MainWindow(QMainWindow):
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
         return widget
 
     def add_broadcast_step(self, party_name: str, variables: list[str]):
@@ -319,4 +603,25 @@ class MainWindow(QMainWindow):
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
         return widget
+
+    def add_subroutine_step(self, subroutine_name: str, clients: list[str]):
+        widget = SubroutineWidget(subroutine_name, clients)
+        list_item = QListWidgetItem(self.list_widget)
+        list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
+        self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
+        return widget
+
+    def get_party_index(self, party_name: str):
+        return list(self.party_indexes.keys()).index(party_name)
+
+    def update_all_indexes(self):
+        highest_index = max(self.party_indexes.values())
+        for party in self.party_indexes:
+            self.party_indexes[party] = highest_index + 1

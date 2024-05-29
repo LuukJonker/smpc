@@ -9,21 +9,23 @@ from SMPCbox.ProtocolOpps import (
     ProtocolSubroutine,
 )
 
+from SMPCbox.ProtocolCompiler import CompiledProtocol
 
 def convert_to_list(var: Union[str, list[str]]):
-    list_var: list[str] = [var] if type(var) == str else list(var)
+    list_var: list[str] = [var] if isinstance(var, str) else list(var)
     return list_var
 
 
-class AbstractProtocolVisualiser(ABC):
-    @abstractmethod
+class AbstractProtocolVisualiser:
     def __init__(self):
         pass
 
-    @abstractmethod
+    def add_step(self, step_name: str):
+        pass
+
     def add_computation(
         self,
-        computing_party_name: str,
+        party_name: str,
         computed_vars: dict[str, Any],
         computation: str,
         used_vars: dict[str, Any],
@@ -38,12 +40,11 @@ class AbstractProtocolVisualiser(ABC):
         """
         pass
 
-    @abstractmethod
     def send_message(
         self,
         sending_party_name: str,
         receiving_party_name: str,
-        variables: dict[str, Any],
+        variables: list[str],
     ):
         """
         This method should implement the visualisation of message sending.
@@ -54,10 +55,7 @@ class AbstractProtocolVisualiser(ABC):
         """
         pass
 
-    @abstractmethod
-    def broadcast_variable(
-        self, broadcasting_party_name: str, variables: dict[str, Any]
-    ):
+    def broadcast_variable(self, party_name: str, variables: dict[str, Any]):
         """
         This method should implement the visualisation of a broadcast.
         Args:
@@ -66,7 +64,6 @@ class AbstractProtocolVisualiser(ABC):
         """
         pass
 
-    @abstractmethod
     def start_subroutine(
         self,
         subroutine_name: str,
@@ -85,7 +82,6 @@ class AbstractProtocolVisualiser(ABC):
         """
         pass
 
-    @abstractmethod
     def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
         """
         This method tells the ProtocolVisualiser that the subroutine we are in has ended. We thus return to the protocol which called the subroutine protocol originaly.
@@ -94,49 +90,6 @@ class AbstractProtocolVisualiser(ABC):
         Args:
             output_values (dict[str, dict[str, Any]]): For each party (names from within the subroutine), the dictionary contains all the output variables and their values.
         """
-        pass
-
-
-class EmptyVisualiser(AbstractProtocolVisualiser):
-    """
-    This class is used when no visualiser is provided and does nothing when the visualisation methods are called.
-    """
-
-    def __init__(self):
-        pass
-
-    def add_computation(
-        self,
-        computing_party_name: str,
-        computed_vars: dict[str, Any],
-        computation: str,
-        used_vars: dict[str, Any],
-    ):
-        pass
-
-    def send_message(
-        self,
-        sending_party_name: str,
-        receiving_party_name: str,
-        variables: dict[str, Any],
-    ):
-        pass
-
-    def broadcast_variable(
-        self, broadcasting_party_name: str, variables: dict[str, Any]
-    ):
-        pass
-
-    def start_subroutine(
-        self,
-        subroutine_name: str,
-        party_mapping: dict[str, str],
-        input_mapping: dict[str, dict[str, str]],
-        output_mapping: dict[str, dict[str, str]],
-    ):
-        pass
-
-    def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
         pass
 
 
@@ -150,7 +103,10 @@ class AbstractProtocol(ABC):
         self.running_party = None
         self.protocol_steps: list[ProtocolStep] = []
         self.protocol_output: dict[str, dict[str, Any]] = {}
-        self.visualiser: AbstractProtocolVisualiser = EmptyVisualiser()
+        self.visualiser: AbstractProtocolVisualiser = AbstractProtocolVisualiser()
+
+        self.compiling = False
+        self.compiled_protocol: CompiledProtocol
 
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
@@ -265,6 +221,15 @@ class AbstractProtocol(ABC):
 
         computed_vars = convert_to_list(computed_vars)
 
+        if self.compiling:
+            party_name = self.get_name_of_party(computing_party)
+            input_vars = convert_to_list(input_vars)
+            self.compiled_protocol.add_computation(
+                party_name, computed_vars, input_vars, computation, description
+            )
+            return
+
+
         # Verify the existence of a current protocol step
         self.in_protocol_step()
 
@@ -286,14 +251,6 @@ class AbstractProtocol(ABC):
         for name in input_vars:
             input_var_values[name] = computing_party.get_variable(name)
 
-        # add the local computation
-        self.visualiser.add_computation(
-            self.get_name_of_party(computing_party),
-            computed_var_values,
-            description,
-            input_var_values,
-        )
-
     def add_protocol_step(self, step_name: str = ""):
         """
         Declares the start of a new round/step of the protocol.
@@ -303,6 +260,9 @@ class AbstractProtocol(ABC):
             step_name = f"step_{len(self.protocol_steps) + 1}"
 
         self.protocol_steps.append(ProtocolStep(step_name))
+
+        if step_name != "" and self.compiling:
+            self.compiled_protocol.add_comment(step_name)
 
     def send_variables(
         self,
@@ -318,11 +278,22 @@ class AbstractProtocol(ABC):
         Note that the variables argument can be both a single string and a list of strings in case more than one
         variable is send
         """
+
         # Verify the existence of a current protocol step
         self.in_protocol_step()
 
         # in the case that the variables is just a single string convert it to a list
         variables = convert_to_list(variables)
+
+        if not self.broadcasting and self.compiling:
+            sending_party_name = self.get_name_of_party(sending_party)
+            receiving_party_name = self.get_name_of_party(receiving_party)
+
+            self.compiled_protocol.add_send_receive(
+                sending_party_name, receiving_party_name, variables
+            )
+
+
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
@@ -338,12 +309,17 @@ class AbstractProtocol(ABC):
                     # The variable is posibly not received yet.
                     variable_values[var] = None
 
-        if not self.broadcasting:
-            sending_party_name = self.get_name_of_party(sending_party)
-            receiving_party_name = self.get_name_of_party(receiving_party)
-            self.visualiser.send_message(
-                sending_party_name, receiving_party_name, variable_values
-            )
+    def compile(self):
+        """
+        This method is used to compile the protocol into a list of ProtocolOpperations.
+        This is used to visualise the protocol in a GUI.
+        """
+        self.compiled_protocol = CompiledProtocol(self.get_party_roles())
+        self.compiling = True
+        self()
+        self.compiling = False
+
+        return self.compiled_protocol
 
     @abstractmethod
     def __call__(self):
@@ -364,13 +340,16 @@ class AbstractProtocol(ABC):
         """
         Sets the inputs for the protocols (all inputs specified by get_expected_input) should be given
         If set_running_party has been called only the input for that party needs to be given
-        If the protocol is not run distributed then the inputs for all the parties should be provided.
+        If the protocol is, [yourself.vars[v] for v in self.vars] not run distributed then the inputs for all the parties should be provided.
 
         This method also checks wether the provided input is correct according to the get_expected_input method
 
         WARNING: This method uses the ProtocolParty classes to store the provided input. Calling set_protocol_parties
         after a call to this method thus erases the input.
         """
+        if self.compiling:
+            return
+
         expected_vars = self.get_expected_input()
         for role in inputs.keys():
             self.check_role_exists(role)
@@ -422,9 +401,23 @@ class AbstractProtocol(ABC):
         After a call to this method the variables with the provided names can be used as local variables in all party.
         """
 
-        self.broadcasting = True
-
         variables = convert_to_list(variables)
+
+        if self.compiling:
+            broadcasting_party_name = self.get_name_of_party(broadcasting_party)
+            self.compiled_protocol.add_broadcast(broadcasting_party_name, variables)
+            return
+
+        var_values = {var: broadcasting_party.get_variable(var) for var in variables}
+
+        self.visualiser.broadcast_variable(
+            self.get_name_of_party(broadcasting_party), var_values
+        )
+
+        if self.compiling:
+            return
+
+        self.broadcasting = True
 
         # Verify the existence of a current protocol step
         self.in_protocol_step()
@@ -434,12 +427,6 @@ class AbstractProtocol(ABC):
                 continue
 
             self.send_variables(broadcasting_party, receiver, variables)
-
-        var_values = {var: broadcasting_party.get_variable(var) for var in variables}
-
-        self.visualiser.broadcast_variable(
-            self.get_name_of_party(broadcasting_party), var_values
-        )
 
         self.broadcasting = False
 
@@ -464,13 +451,14 @@ class AbstractProtocol(ABC):
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
 
+        if self.compiling:
+            self.compiled_protocol.add_subroutine(
+                protocol_class, role_assignments, inputs, output_vars
+            )
+            return
+
         protocol = protocol_class()
         protocol.set_protocol_parties(role_assignments)
-
-        role_assignments_names = {
-            role: self.get_name_of_party(party)
-            for role, party in role_assignments.items()
-        }
 
         # before calling start_subroutine_protocol on the parties
         # we first gather the provided variables from the parties to avoid namespace issues.
@@ -514,11 +502,6 @@ class AbstractProtocol(ABC):
                 if self.running_party == party.name:
                     protocol.set_running_party(role, party)
 
-        # tell the visualiser we will be running a subroutine.
-        self.visualiser.start_subroutine(
-            protocol.protocol_name, role_assignments_names, input_values, output_vars
-        )
-
         # run the protocol
         protocol()
 
@@ -531,7 +514,7 @@ class AbstractProtocol(ABC):
 
         # now assign the output variables (not with the subroutine prefix _name_[var_name])
         for role in subroutine_output.keys():
-            party = role_assignments[role]
+            party: ProtocolParty = role_assignments[role]
             if not self.is_local_party(party):
                 # No need to set the output of non local parties
                 continue

@@ -2,7 +2,7 @@ from typing import Type, Any, Callable, Union
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
 from sys import getsizeof
-    
+
 class PartyStats():
     def __init__(self):
         self.execution_time: float = 0
@@ -39,29 +39,29 @@ class ProtocolParty ():
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
 
-        # stores the variables which have been "received" to not have to request them from the 
+        # stores the variables which have been "received" to not have to request them from the
         # SMPCSocket yet and the sender which send the variable
         self.not_yet_received_vars: dict[str, ProtocolParty] = {}
 
     def get_namespace(self) -> str:
         if len(self.__namespace_prefixes) == 0:
             return ""
-        
+
         # start with a '_' to seperate the var name from the namespace
         namespace = "_"
         for prefix in self.__namespace_prefixes:
             namespace = prefix + namespace
         return namespace
-    
+
     def start_subroutine_protocol(self, subroutine_name: str):
         self.__namespace_prefixes.append(f"_{subroutine_name}")
-    
+
     def end_subroutine_protocol(self):
         self.__namespace_prefixes.pop()
-    
+
     def print_local_variables(self):
         print(self.__local_variables)
-    
+
     def get_variable(self, variable_name: str):
         # handle the namespace
         variable_name = self.get_namespace() + variable_name
@@ -76,7 +76,7 @@ class ProtocolParty ():
 
             # add the received values bytes to the received bytes stat
             self.statistics.bytes_received += getsizeof(value)
-            
+
             self.statistics.wait_time += e_wait_time - s_wait_time
 
             self.__local_variables[variable_name] = value
@@ -85,7 +85,7 @@ class ProtocolParty ():
 
         if not variable_name in self.__local_variables.keys():
             raise Exception(f"Trying to get non existend variable \"{variable_name}\" from the party \"{self.name}\"")
-        
+
         return self.__local_variables[variable_name]
 
     def run_computation(self, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
@@ -109,14 +109,16 @@ class ProtocolParty ():
         if len(computed_vars) == 1:
             self.__local_variables[computed_vars[0]] = res
             return
-        
-        # check if enough values are returned 
+
+        # check if enough values are returned
         if len(res) != len(computed_vars):
             raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
-        
+
         # assign the values
         for i, var in enumerate(computed_vars):
             self.__local_variables[var] = res[i]
+
+        return res
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
@@ -137,9 +139,9 @@ class ProtocolParty ():
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender
-        
+
         self.statistics.messages_received += 1
-    
+
     def get_stats(self) -> PartyStats:
         """
         Retreives the statistics of a single ProtocolParty
