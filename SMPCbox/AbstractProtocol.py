@@ -48,7 +48,7 @@ class AbstractProtocolVisualiser(ABC):
         pass
 
     @abstractmethod
-    def broadcast_variable(
+    def broadcast_variables(
         self, broadcasting_party_name: str, variables: dict[str, Any]
     ):
         """
@@ -206,6 +206,12 @@ class AbstractProtocol(ABC):
         """
         self.check_name_exists(name)
         self.running_party = name
+
+        # ensure that the other parties are ready
+        listening_socket = self.parties[name].socket
+        other_parties: list[ProtocolParty] = list(self.parties.values())
+        other_parties.remove(self.parties[name])
+        listening_socket.connect_to_parties(other_parties)
 
     def is_local_party(self, party: ProtocolParty) -> bool:
         """
@@ -424,7 +430,7 @@ class AbstractProtocol(ABC):
 
         var_values = {var: broadcasting_party.get_variable(var) for var in variables}
 
-        self.visualiser.broadcast_variable(
+        self.visualiser.broadcast_variables(
             self.get_name_of_party(broadcasting_party), var_values
         )
 
