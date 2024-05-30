@@ -60,7 +60,11 @@ class ProtocolParty ():
     
     def print_local_variables(self):
         print(self.__local_variables)
-    
+
+    def __getitem__(self, key):
+        # Allows to use [] to retrieve variables of a party.
+        return self.get_variable(key)
+
     def get_variable(self, variable_name: str):
         # handle the namespace
         variable_name = self.get_namespace() + variable_name
@@ -87,20 +91,16 @@ class ProtocolParty ():
         
         return self.__local_variables[variable_name]
 
-    def run_computation(self, computed_vars: Union[str, list[str]], input_vars: Union[str, list[str]], computation: Callable, description: str):
-        # make sure the input vars and computed_vars are lists
-        input_vars = [input_vars] if type(input_vars) == str else input_vars
+    def run_computation(self, computed_vars: Union[str, list[str]], computation: Callable, description: str):
+        # make sure the computed_vars are a list
         computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
-
-        # get the input values
-        input_vals = [self.get_variable(var) for var in input_vars]
 
         # add the namespace to the computed_var names
         computed_vars = [self.get_namespace() + name for name in computed_vars]
 
         # get the local variables
         t_start = time.time()
-        res = computation(*input_vals)
+        res = computation()
         t_end = time.time()
         self.statistics.execution_time += t_end - t_start
 

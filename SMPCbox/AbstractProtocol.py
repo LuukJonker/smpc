@@ -18,8 +18,7 @@ class AbstractProtocolVisualiser(ABC):
         self,
         computing_party_name: str,
         computed_vars: dict[str, Any],
-        computation: str,
-        used_vars: dict[str, Any],
+        computation: str
     ):
         """
         This method visualises a computation.
@@ -27,7 +26,6 @@ class AbstractProtocolVisualiser(ABC):
             computing_party_name (str): The name of the party performing the computation.
             computed_vars (dict[str, Any]): A dictionary of all the (new) variables which have been computed and their values.
             computation (str): A string description of the computation.
-            used_vars (dict[str, Any]): A dictionary containing the names and values of all the local variables which were used in the computation.
         """
         pass
 
@@ -102,8 +100,7 @@ class EmptyVisualiser(AbstractProtocolVisualiser):
         self,
         computing_party_name: str,
         computed_vars: dict[str, Any],
-        computation: str,
-        used_vars: dict[str, Any],
+        computation: str
     ):
         pass
 
@@ -243,7 +240,6 @@ class AbstractProtocol(ABC):
         self,
         computing_party: ProtocolParty,
         computed_vars: Union[str, list[str]],
-        input_vars: Union[str, list[str]],
         computation: Callable,
         description: str,
     ):
@@ -266,7 +262,7 @@ class AbstractProtocol(ABC):
             return
 
         computing_party.run_computation(
-            computed_vars, input_vars, computation, description
+            computed_vars, computation, description
         )
 
         # Get the computed values
@@ -274,17 +270,11 @@ class AbstractProtocol(ABC):
         for name in computed_vars:
             computed_var_values[name] = computing_party.get_variable(name)
 
-        # Get the input values
-        input_var_values = {}
-        for name in input_vars:
-            input_var_values[name] = computing_party.get_variable(name)
-
         # add the local computation
         self.visualiser.add_computation(
             self.get_name_of_party(computing_party),
             computed_var_values,
-            description,
-            input_var_values,
+            description
         )
 
     def add_protocol_step(self, step_name: str = ""):
