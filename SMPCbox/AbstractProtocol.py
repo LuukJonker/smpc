@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
-from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
+from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.ProtocolStep import ProtocolStep
 
 def convert_to_list(var: Union[str, list[str]]):
@@ -526,16 +526,28 @@ class AbstractProtocol(ABC):
 
         self.visualiser.end_subroutine(subroutine_output)
 
-    def get_statistics(self) -> dict[str, PartyStats]:
+    def get_party_statistics(self) -> dict[str, TrackedStatistics]:
         """
         Returns the statistics of each party in the protocol
         The return is a dictionary with each role mapping to the statistics of that party
         """
         stats = {}
         for role, party in self.parties.items():
-            stats[role] = party.get_stats()
+            stats[role] = party.get_statistics()
 
         return stats
+    
+    def get_total_statistics(self) -> TrackedStatistics:
+        """
+        This method returns the agregated statistics of all the parties.
+        This is the same data as returned from the get_party_statistics method
+        """
+        total_stats = TrackedStatistics()
+        for party in self.parties.values():
+            party_stats: TrackedStatistics = party.get_statistics()
+            total_stats += party_stats
+        
+        return total_stats
 
     def get_protocol_steps(self) -> list[ProtocolStep]:
         """

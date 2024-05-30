@@ -1,9 +1,14 @@
-from typing import Any, Callable, Union
+from __future__ import annotations
+from typing import Any, Callable, Union, TYPE_CHECKING
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
 from sys import getsizeof
-    
-class PartyStats():
+
+if TYPE_CHECKING:
+    from ProtocolParty import TrackedStatistics
+
+
+class TrackedStatistics():
     def __init__(self):
         self.execution_time: float = 0
         self.wait_time: float = 0
@@ -22,6 +27,16 @@ class PartyStats():
         bytes_send: {self.bytes_send}
         messages_received: {self.messages_received}
         bytes_received: {self.bytes_received}"""
+    
+    def __add__(self, other_stats: TrackedStatistics) -> TrackedStatistics:
+        res = TrackedStatistics()
+        res.execution_time = self.execution_time + other_stats.execution_time
+        res.wait_time = self.wait_time + other_stats.wait_time
+        res.messages_send = self.messages_send + other_stats.messages_send
+        res.messages_received = self.messages_received + other_stats.messages_received
+        res.bytes_send = self.bytes_send + other_stats.bytes_send
+        res.bytes_received = self.bytes_received + other_stats.bytes_received
+        return res
 
 class ProtocolParty ():
     def __init__(self, address: str = "", is_listening_socket=True):
@@ -33,7 +48,7 @@ class ProtocolParty ():
         """
         self.socket = SMPCSocket(address, is_listening_socket=is_listening_socket)
         self.__local_variables: dict[str, Any] = {}
-        self.statistics = PartyStats()
+        self.statistics = TrackedStatistics()
 
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
@@ -139,7 +154,7 @@ class ProtocolParty ():
         
         self.statistics.messages_received += 1
     
-    def get_stats(self) -> PartyStats:
+    def get_statistics(self) -> TrackedStatistics:
         """
         Retreives the statistics of a single ProtocolParty
         """

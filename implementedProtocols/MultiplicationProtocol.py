@@ -7,7 +7,7 @@ sys.path.append('../')
 
 import time
 from SMPCbox import AbstractProtocol
-from OT import OT
+from implementedProtocols import OT
 import os
 
 def rand_int():
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     e = time.time()
     print("execution time:", e-s)
     out = p.get_output()
-    for role, stats in p.get_statistics().items():
+    for role, stats in p.get_party_statistics().items():
         print(role)
         print(stats)
 
