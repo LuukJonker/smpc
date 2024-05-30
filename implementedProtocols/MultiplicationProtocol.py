@@ -1,4 +1,9 @@
 # implements the protocol from Gilboa1999 for multiplication
+# temporary for now to allow the import of the SMPCbox from the implementedProtocols
+# folder. Should remove once it is pip installable
+import sys
+sys.path.append('../')
+
 
 import time
 from SMPCbox import AbstractProtocol
@@ -30,24 +35,28 @@ class SecretShareMultiplication(AbstractProtocol):
     def __call__(self):
         self.add_protocol_step("Generate r")
         r_vars = ["r" + str(num) for num in range(self.l)]
-        self.compute(self.parties["Alice"], r_vars, [], lambda: [rand_int() for _ in range(self.l)], "rand()")
+        self.compute(self.parties["Alice"], r_vars, lambda: [rand_int() for _ in range(self.l)], "rand()")
+
+        bob = self.parties["Bob"]
+        alice = self.parties["Alice"]
 
         self.add_protocol_step("Perform l OTs")
         for i in range(self.l):
             # calculate a*2^i + r_i:
-            self.compute(self.parties["Alice"], ["m1_input"], ["a", "r" + str(i)], lambda a, r_i: a * (2**i) + r_i, "a*2^i + r_i")
+            self.compute(alice, ["m1_input"], lambda: alice["a"] * (2**i) + alice["r" + str(i)], "a*2^i + r_i")
             # get ith bit of Bob's b variable
-            self.compute(self.parties["Bob"], "b_i", "b", lambda b: (b >> i) & 1, "Determine b_i")
+            self.compute(bob, "b_i", lambda: (bob["b"] >> i) & 1, "Determine b_i")
 
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
             self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
 
         self.add_protocol_step("Calculate outputs")
-        self.compute(self.parties["Alice"], "x", r_vars, lambda *r_vals: -sum(r_vals), "- Sum of all r_i")
+
+        self.compute(alice, "x", lambda: -sum(alice[var] for var in r_vars), "minus Sum of all r_i")
 
         exchanged_messages = [f"m{i}_b{i}" for i in range(self.l)]
-        self.compute(self.parties["Bob"], "y", exchanged_messages, lambda *all_messages: sum(all_messages), "Sum of all mi_bi")
+        self.compute(bob, "y", lambda: sum([bob[var] for var in exchanged_messages]), "Sum of all mi_bi")
 
 
 if __name__ == "__main__":
