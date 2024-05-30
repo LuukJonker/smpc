@@ -71,30 +71,29 @@ class OT(AbstractProtocol):
 
 
 if __name__ == "__main__":
+    ot_protocol = OT()
+    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    s = time.time()
+    ot_protocol()
+    e = time.time()
+    print("OT time", e-s)
+    for role, stats in ot_protocol.get_party_statistics().items():
+        print(role)
+        print(stats)
+
     # ot_protocol = OT()
 
-    # ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
-    # s = time.time()
+    # sender = ProtocolParty(address="127.0.0.1:4856")
+    # receiver = ProtocolParty(address="127.0.0.1:4865", is_listening_socket=False)
+    # # time.sleep(5)
+    # ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
+    # ot_protocol.set_running_party("Sender")
+    # ot_protocol.set_input({"Sender": {"m0": 21, "m1": 39}})
     # ot_protocol()
-    # e = time.time()
-    # print("OT time", e-s)
-    # for role, stats in ot_protocol.get_statistics().items():
-    #     print(role)
-    #     print(stats)
+    # for step in ot_protocol.protocol_steps:
+    #     for opp in step.step_description:
+    #         print(opp.__str__())
 
-    ot_protocol = OT()
-
-    sender = ProtocolParty(address="127.0.0.1:4856")
-    receiver = ProtocolParty(address="127.0.0.1:4865", is_listening_socket=False)
-    # time.sleep(5)
-    ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
-    ot_protocol.set_running_party("Sender")
-    ot_protocol.set_input({"Sender": {"m0": 21, "m1": 39}})
-    ot_protocol()
-    for step in ot_protocol.protocol_steps:
-        for opp in step.step_description:
-            print(opp.__str__())
-
-    print(ot_protocol.get_output())
+    # print(ot_protocol.get_output())
 
     ot_protocol.terminate_protocol()

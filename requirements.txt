@@ -2,3 +2,5 @@ PyQt5==5.15.10
 PyQt5-Qt5==5.15.2
 PyQt5-sip==12.13.0
 SMPCbox==1.0.1
+pynvml==11.5.0
+pyJoules==0.5.1

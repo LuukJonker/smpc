@@ -3,6 +3,12 @@ from typing import Any, Callable, Union, TYPE_CHECKING
 from SMPCbox.SMPCSocket import SMPCSocket
 import time
 from sys import getsizeof
+from pyJoules.energy_meter import EnergyMeter
+from pyJoules.device.rapl_device import RaplPackageDomain, RaplDramDomain, RaplUncoreDomain, Domain
+from pyJoules.device.device_factory import DeviceFactory
+from pyJoules.exception import NoSuchDomainError
+import os
+import warnings
 
 if TYPE_CHECKING:
     from ProtocolParty import TrackedStatistics
@@ -11,6 +17,7 @@ if TYPE_CHECKING:
 class TrackedStatistics():
     def __init__(self):
         self.execution_time: float = 0
+        self.energy_consumption: float = 0
         self.wait_time: float = 0
         self.messages_send: int = 0
         self.messages_received: int = 0
@@ -22,6 +29,7 @@ class TrackedStatistics():
         return f"""
         Statistics
         execution_time: {self.execution_time}
+        energy_consumption: {self.energy_consumption}
         wait_time: {self.wait_time}
         messages_send: {self.messages_send}
         bytes_send: {self.bytes_send}
@@ -31,12 +39,55 @@ class TrackedStatistics():
     def __add__(self, other_stats: TrackedStatistics) -> TrackedStatistics:
         res = TrackedStatistics()
         res.execution_time = self.execution_time + other_stats.execution_time
+        res.energy_consumption = self.energy_consumption + other_stats.energy_consumption
         res.wait_time = self.wait_time + other_stats.wait_time
         res.messages_send = self.messages_send + other_stats.messages_send
         res.messages_received = self.messages_received + other_stats.messages_received
         res.bytes_send = self.bytes_send + other_stats.bytes_send
         res.bytes_received = self.bytes_received + other_stats.bytes_received
         return res
+
+def is_root():
+    if os.name == 'nt':
+        # Windows specific check
+        import ctypes
+        try:
+            is_admin = ctypes.windll.shell32.IsUserAnAdmin()
+        except AttributeError:
+            is_admin = False
+        return is_admin
+    else:
+        # Unix-like system check
+        return os.geteuid() == 0
+    
+class DummyMeter:
+    def __init__(self):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+def get_energy_meter() -> EnergyMeter | DummyMeter:
+    if not is_root():
+        warnings.warn("Energy measurement is disabled, run the program with \"sudo -E\" to allow energy measurement")
+        return DummyMeter()
+    
+    domains: list[Domain] = [RaplPackageDomain(0), RaplDramDomain(0), RaplUncoreDomain(0)]
+    devices = []
+    for domain in domains:
+        try:
+            # we need to pass an itterable (typing of pyJoules seems incorrect)
+            devices.append(DeviceFactory.create_devices([domain])[0])
+        except NoSuchDomainError:
+            if domain == "package_0":
+                warnings.warn("Domain \"package_0\" doesn't exist, energy consumption measurement is disabled")
+                return DummyMeter()
+            continue
+
+    return EnergyMeter(devices)
 
 class ProtocolParty ():
     def __init__(self, address: str = "", is_listening_socket=True):
@@ -49,6 +100,7 @@ class ProtocolParty ():
         self.socket = SMPCSocket(address, is_listening_socket=is_listening_socket)
         self.__local_variables: dict[str, Any] = {}
         self.statistics = TrackedStatistics()
+        self.energy_meter = get_energy_meter()
 
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
@@ -88,6 +140,7 @@ class ProtocolParty ():
         if variable_name in self.not_yet_received_vars.keys():
             sender = self.not_yet_received_vars[variable_name]
             # request the variable from the socket
+            
             s_wait_time = time.time()
             value = self.socket.receive_variable(sender, variable_name)
             e_wait_time = time.time()
@@ -105,6 +158,21 @@ class ProtocolParty ():
             raise Exception(f"Trying to get non existend variable \"{variable_name}\"")
         
         return self.__local_variables[variable_name]
+    
+    def run_profiled_computation(self, computation: Callable) -> Any:
+        """
+        Runs the computation and updates the statistics of this party with the measured performance values.
+        """
+        self.energy_meter.start()
+        t_start = time.time()
+
+        res = computation()
+        
+        t_end = time.time()
+        self.energy_meter.stop()
+        self.statistics.execution_time += t_end - t_start
+
+        return res
 
     def run_computation(self, computed_vars: Union[str, list[str]], computation: Callable, description: str):
         # make sure the computed_vars are a list
@@ -114,10 +182,8 @@ class ProtocolParty ():
         computed_vars = [self.get_namespace() + name for name in computed_vars]
 
         # get the local variables
-        t_start = time.time()
-        res = computation()
-        t_end = time.time()
-        self.statistics.execution_time += t_end - t_start
+        
+        res = self.run_profiled_computation(computation)
 
         # assign the output if there is just a single output variable
         if len(computed_vars) == 1:
@@ -158,6 +224,16 @@ class ProtocolParty ():
         """
         Retreives the statistics of a single ProtocolParty
         """
+
+        # get the energy meters result:
+        energy_consumption = 0
+        if isinstance(self.energy_meter, EnergyMeter):
+            trace = self.energy_meter.get_trace()
+            for record in trace:
+                print(record.energy)
+                energy_consumption += sum(record.energy.values())
+        
+        self.statistics.energy_consumption = energy_consumption
         return self.statistics
 
     """ should be called to make sure the sockets exit nicely """
