@@ -5,6 +5,7 @@ import threading
 import json
 import select
 import time
+from enum import Enum
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
@@ -28,6 +29,19 @@ def get_key_by_value(d, value):
             return key
     return None
 
+class MessageType(Enum):
+    ANNOUNCE_NAME="ANNOUNCE"
+    SEND_VARIABLES="SEND_VARS"
+
+def parse_enum(enum_class, val):
+    try:
+        return enum_class(val)
+    except ValueError as e:
+        print("INVALID MSG_TYPE: ", val)
+        raise e
+
+def construct_msg(type: MessageType, content: str) -> str:
+    return f"{type.value}${len(content)}${content}"
 
 class SMPCSocket ():
     def __init__ (self):
@@ -61,11 +75,17 @@ class SMPCSocket ():
         by sending their listening ip and port.
         """
         
-        parts = msg.split()
-        msg_type = parts[0]
+        
+        msg_type, msg_length, rest = msg.split('$', maxsplit=2)
+        msg_length = int(msg_length)
+        msg_content = rest[:msg_length]
+        additional_data = rest[msg_length:]
+
+        msg_type = parse_enum(MessageType, msg_type)
+
         match msg_type:
-            case "SEND_VARIABLES":
-                variables = parts[1:]
+            case MessageType.SEND_VARIABLES:
+                variables = msg_content.split()
                 var_names = []
                 values = []
                 for i in range(0, len(variables), 2):
@@ -79,11 +99,15 @@ class SMPCSocket ():
                     raise Exception("Received variables from unknown client socket")
                 self.put_variables_in_buffer(sender_addr, var_names, values)
             
-            case "ANNOUNCE_NAME":
-                ip, port = parse_address(parts[1])
+            case MessageType.ANNOUNCE_NAME:
+                ip, port = parse_address(msg_content)
                 self.client_sockets[sock] = stringify_address(ip,port)
             case _:
                 raise Exception(f"Received message starting with unknown message type {msg_type}")
+        
+        if additional_data:
+            # the data contained another message
+            self.decode_received_msg(additional_data, sock)
     
     def start_listening(self):
         """
@@ -132,7 +156,8 @@ class SMPCSocket ():
                 self.client_sockets[new_client] = stringify_address(ip, port)
 
                 # announce who we are
-                message = f"ANNOUNCE_NAME {self.ip}:{self.port}"
+                msg_content =  f"{self.ip}:{self.port}"
+                message = construct_msg(MessageType.ANNOUNCE_NAME, msg_content)
                 new_client.sendall(message.encode())
                 return
             except (socket.timeout, ConnectionRefusedError):
@@ -237,14 +262,16 @@ class SMPCSocket ():
             if addr not in self.client_sockets.values():
                 raise Exception(f"Client with listening address {addr} non connected")
             
-            msg = "SEND_VARIABLES"
+            msg = ""
             # Add all the variables
             for var, val in zip(variable_names, values):
                 msg += f" {var} {json.dumps(val)}"
 
+            msg = construct_msg(MessageType.SEND_VARIABLES, msg)
             socket = get_key_by_value(self.client_sockets, addr)
             if socket == None:
                 # we have just checked that the addr exists so we know there will be a socket
                 raise Exception()
+
             socket.sendall(msg.encode())
           

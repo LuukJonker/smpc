@@ -142,6 +142,8 @@ class AbstractProtocol(ABC):
         self.protocol_output: dict[str, dict[str, Any]] = {}
         self.visualiser: AbstractProtocolVisualiser = EmptyVisualiser()
 
+        self.running_simulated = True
+
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
 
@@ -163,21 +165,8 @@ class AbstractProtocol(ABC):
         Returns an ordered list of the names of each party in the protocol
         For example for oblivious transfer the roles could be
         ["sender", "receiver"]
-        The return of this function tels protocol users in which order to pass there
-        ProtocolParty instances to the set_protocol_parties function
         """
         pass
-
-    def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
-        """
-        This method should NOT be used by users of SMPCbox. Method is used internally
-        """
-
-        if set(role_assignments.keys()) != set(self.get_party_names()):
-            raise Exception(
-                "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
-            )
-        self.parties = role_assignments
 
     def check_name_exists(self, name: str):
         if name not in self.get_party_names():
@@ -185,7 +174,7 @@ class AbstractProtocol(ABC):
                 f'The party name "{name}" does not exist in the protocol "{self.protocol_name}"'
             )
 
-    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str):
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str | None):
         """
         This method sets the protocol to run distributedly. This method expects two arguments:
 
@@ -194,10 +183,15 @@ class AbstractProtocol(ABC):
         local_party_name: the name of the party to run locally on this machine
         """
 
+        self.running_simulated = False
+
         # set all the addresses
         for party_name, addr in addresses.items():
             self.check_name_exists(party_name)
             self.parties[party_name].socket.set_address(addr)
+
+        if local_party_name is None:
+            return
 
         # spin up the local party
         self.check_name_exists(local_party_name)
@@ -216,7 +210,10 @@ class AbstractProtocol(ABC):
         This is the case if there is no runnning party set in which case all parties are simulated on this machine.
         Or if the given party is the running party
         """
-        return self.running_party == None or self.running_party == self.get_name_of_party(party)
+        if self.running_simulated:
+            return True
+        else:
+            return self.running_party == self.get_name_of_party(party)
 
     def in_protocol_step(self):
         """
@@ -350,9 +347,6 @@ class AbstractProtocol(ABC):
         If the protocol is not run distributed then the inputs for all the parties should be provided.
 
         This method also checks wether the provided input is correct according to the get_expected_input method
-
-        WARNING: This method uses the ProtocolParty classes to store the provided input. Calling set_protocol_parties
-        after a call to this method thus erases the input.
         """
         expected_vars = self.get_expected_input()
         for role in inputs.keys():
@@ -493,9 +487,18 @@ class AbstractProtocol(ABC):
         # Comunicate to the protocol wether a certain party is running the protocol locally
         if self.running_party != None:
             # find what role the running_party has and set them as the running party in the subroutine protocol
+            local_party_role = None
+            
             for role, party in role_assignments.items():
                 if self.running_party == self.get_name_of_party(party):
-                    protocol.set_running_party(role)
+                    local_party_role = role
+            
+            # Tell the protocol that it is running distributed
+            protocol.running_party = local_party_role
+            protocol.running_simulated = False
+            # the addresses do not have to be provided these are in the ProtocolParty instances provided with
+            # set_protocol_parties
+
 
         # tell the visualiser we will be running a subroutine.
         self.visualiser.start_subroutine(
@@ -536,6 +539,17 @@ class AbstractProtocol(ABC):
             stats[role] = party.get_statistics()
 
         return stats
+    
+    def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
+        """
+        This method should NOT be used by users of SMPCbox. Method is used internally
+        """
+
+        if set(role_assignments.keys()) != set(self.get_party_names()):
+            raise Exception(
+                "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
+            )
+        self.parties = role_assignments
     
     def get_total_statistics(self) -> TrackedStatistics:
         """
