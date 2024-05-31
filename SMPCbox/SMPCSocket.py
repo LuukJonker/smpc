@@ -30,14 +30,10 @@ def get_key_by_value(d, value):
 
 
 class SMPCSocket ():
-    def __init__ (self, address: str = "", is_listening_socket:bool=False):
-        if address == "":
-            self.ip = None
-            self.port = None
-            self.simulated = True
-        else:
-            self.simulated = False
-            self.ip, self.port = parse_address(address)
+    def __init__ (self):
+        self.ip = None
+        self.port = None
+        self.simulated = True
 
         # a buffer storing all received variables which have not been requested by the parrent class via
         # the receive variable function
@@ -45,20 +41,18 @@ class SMPCSocket ():
         self.smpc_socket_in_use = True
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
-
-        if not self.simulated and is_listening_socket:
-            # create the listening socket which will accept incomming connections and also read messages
-            self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.listening_socket.bind((self.ip, self.port))
-            # TODO remove magic number for backlog in listen
-            self.listening_socket.listen(5)
-            self.listening_thread = threading.Thread(target=self.start_listening)
-            self.listening_thread.start()
         
     def close_client_socket(self, client_sock: socket.socket):
         client_sock.close()
         del self.client_sockets[client_sock]
+    
+    def set_address(self, address: str):
+        """
+        Sets the address the party of this socket listens on.
+        Calling this method sets the SMPCSocket to start using actual sockets
+        """
+        self.simulated = False
+        self.ip, self.port = parse_address(address)
 
     def decode_received_msg(self, msg:str, sock: socket.socket):
         """ 
@@ -90,9 +84,21 @@ class SMPCSocket ():
                 self.client_sockets[sock] = stringify_address(ip,port)
             case _:
                 raise Exception(f"Received message starting with unknown message type {msg_type}")
-        
-                
+    
     def start_listening(self):
+        """
+        Starts the listening thread of this socket.
+        """
+        # create the listening socket which will accept incomming connections and also read messages
+        self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listening_socket.bind((self.ip, self.port))
+        # TODO remove magic number for backlog in listen
+        self.listening_socket.listen(5)
+        self.listening_thread = threading.Thread(target=self.listen)
+        self.listening_thread.start()
+                
+    def listen(self):
         while self.smpc_socket_in_use:
             # TODO put the timeout as a setting (timeout needed so the socket stops if self.smpc_socket_in_use if false)
             client_socks = list(self.client_sockets.keys())

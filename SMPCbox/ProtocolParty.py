@@ -39,14 +39,11 @@ class TrackedStatistics():
         return res
 
 class ProtocolParty ():
-    def __init__(self, address: str = "", is_listening_socket=True):
+    def __init__(self):
         """
-        Instantiates a ProtocolParty. ProtocolParty instances are used within protocols, protocols themselfs
-        instantiate ProtocolParty instances by default though when a user wants to assign a specific name
-        to a certain party or wants to provide an address (ip:port) a party instance can also be provided
-        to a protocol by using the set_protocol_parties or set_running_party methods of the protocol class.
+        Instantiates a ProtocolParty.
         """
-        self.socket = SMPCSocket(address, is_listening_socket=is_listening_socket)
+        self.socket = SMPCSocket()
         self.__local_variables: dict[str, Any] = {}
         self.statistics = TrackedStatistics()
 

@@ -170,17 +170,7 @@ class AbstractProtocol(ABC):
 
     def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
         """
-        Sets the ProtocolParty classes, the dictionary should contain a mapping from every name specified by get_party_names to a
-        ProtocolParty instance.
-
-        The use of this method is not mandatory, if the parties are never set then the protocol class automaticaly creates ProtocolParty
-        instances.
-
-        Note that in the case that the protocol is run distributedly the party running localy should also be specified with the
-        set_running_party method.
-
-        WARNING: Any data, such as input set with the set_input method, which is already stored in the existing ProtocolParty classes
-        is lost once this method is called.
+        This method should NOT be used by users of SMPCbox. Method is used internally
         """
 
         if set(role_assignments.keys()) != set(self.get_party_names()):
@@ -195,19 +185,29 @@ class AbstractProtocol(ABC):
                 f'The party name "{name}" does not exist in the protocol "{self.protocol_name}"'
             )
 
-    def set_running_party(self, name: str):
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str):
         """
-        When running distributedly the party running locally should be set using this function.
-        To do this a ProtocolParty instance must be provided and the role that the party should have must be specified.
-        The available roles can be retrieved with the get_party_roles method.
+        This method sets the protocol to run distributedly. This method expects two arguments:
+
+        addresses: a dictionary containing for each party name an address ("ip:port") on which 
+                   that party will be listening. 
+        local_party_name: the name of the party to run locally on this machine
         """
-        self.check_name_exists(name)
-        self.running_party = name
+
+        # set all the addresses
+        for party_name, addr in addresses.items():
+            self.check_name_exists(party_name)
+            self.parties[party_name].socket.set_address(addr)
+
+        # spin up the local party
+        self.check_name_exists(local_party_name)
+        self.running_party = local_party_name
 
         # ensure that the other parties are ready
-        listening_socket = self.parties[name].socket
+        listening_socket = self.parties[local_party_name].socket
+        listening_socket.start_listening()
         other_parties: list[ProtocolParty] = list(self.parties.values())
-        other_parties.remove(self.parties[name])
+        other_parties.remove(self.parties[local_party_name])
         listening_socket.connect_to_parties(other_parties)
 
     def is_local_party(self, party: ProtocolParty) -> bool:
