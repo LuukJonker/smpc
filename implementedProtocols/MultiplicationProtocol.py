@@ -35,7 +35,7 @@ class SecretShareMultiplication(AbstractProtocol):
     def __call__(self):
         self.add_protocol_step("Generate r")
         r_vars = ["r" + str(num) for num in range(self.l)]
-        self.compute(self.parties["Alice"], r_vars, lambda: [rand_int() for _ in range(self.l)], "rand()")
+        self.compute(self.parties["Alice"], r_vars, lambda: [rand_int() % pow(2, self.l) for _ in range(self.l)], "rand()")
 
         bob = self.parties["Bob"]
         alice = self.parties["Alice"]
@@ -43,30 +43,29 @@ class SecretShareMultiplication(AbstractProtocol):
         self.add_protocol_step("Perform l OTs")
         for i in range(self.l):
             # calculate a*2^i + r_i:
-            self.compute(alice, ["m1_input"], lambda: alice["a"] * (2**i) + alice["r" + str(i)], "a*2^i + r_i")
+            self.compute(alice, ["m1_input"], lambda: (alice["a"] * (2**i) + alice["r" + str(i)]) % pow(2, self.l), "a*2^i + r_i")
             # get ith bit of Bob's b variable
             self.compute(bob, "b_i", lambda: (bob["b"] >> i) & 1, "Determine b_i")
 
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
             self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
+        
+        print(time.time())
 
         self.add_protocol_step("Calculate outputs")
 
-        self.compute(alice, "x", lambda: -sum(alice[var] for var in r_vars), "minus Sum of all r_i")
+        self.compute(alice, "x", lambda: (-sum(alice[var] for var in r_vars)) % pow(2, self.l), "minus Sum of all r_i")
 
         exchanged_messages = [f"m{i}_b{i}" for i in range(self.l)]
-        self.compute(bob, "y", lambda: sum([bob[var] for var in exchanged_messages]), "Sum of all mi_bi")
+        self.compute(bob, "y", lambda: (sum([bob[var] for var in exchanged_messages])) % pow(2, self.l), "Sum of all mi_bi")
 
 
 if __name__ == "__main__":
-    # alice = ProtocolParty("Alice", "127.0.0.1:3299")
-    # bob = ProtocolParty("Bob", "127.0.0.1:3300", is_listening_socket=False)
-    # time.sleep(5)
     p = SecretShareMultiplication(l=32)
-    # p.set_protocol_parties({"Alice": alice, "Bob": bob})
-    # p.set_running_party("Alice", alice)
-    p.set_input({"Alice": {"a": 21}, "Bob": {"b": 3289}})
+    
+    p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Alice")
+    p.set_input({"Alice": {"a": 21}})
     s = time.time()
     p()
     e = time.time()
@@ -78,6 +77,6 @@ if __name__ == "__main__":
 
     p.terminate_protocol()
     print(out)
-    print("Shared secret (x+y):", out["Alice"]["x"] + out["Bob"]["y"] )
+    # print("Shared secret (x+y):", (out["Alice"]["x"] + out["Bob"]["y"] ) % pow(2, 32))
 
 

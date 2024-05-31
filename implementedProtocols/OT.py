@@ -83,12 +83,7 @@ if __name__ == "__main__":
     #     print(stats)
 
     ot_protocol = OT()
-
-    sender = ProtocolParty(address="127.0.0.1:4856")
-    receiver = ProtocolParty(address="127.0.0.1:4865", is_listening_socket=False)
-    # time.sleep(5)
-    ot_protocol.set_protocol_parties({"Sender": sender, "Receiver": receiver})
-    ot_protocol.set_running_party("Sender")
+    ot_protocol.set_party_addresses({"Sender": "127.0.0.1:4859", "Receiver": "127.0.0.1:4868"}, "Sender")
     ot_protocol.set_input({"Sender": {"m0": 21, "m1": 39}})
     ot_protocol()
     for step in ot_protocol.protocol_steps:

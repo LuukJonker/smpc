@@ -4,12 +4,8 @@ import time
 
 
 if __name__ == "__main__":
-    alice =ProtocolParty("127.0.0.1:3299", is_listening_socket=False)
-    bob = ProtocolParty("127.0.0.1:3300")
-    time.sleep(5)
     p = SecretShareMultiplication(l=32)
-    p.set_protocol_parties({"Alice": alice, "Bob": bob})
-    p.set_running_party("Bob")
+    p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Bob")
     p.set_input({"Bob": {"b": 13}})
 
     p()

@@ -5,6 +5,7 @@ import threading
 import json
 import select
 import time
+from enum import Enum
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
@@ -28,16 +29,25 @@ def get_key_by_value(d, value):
             return key
     return None
 
+class MessageType(Enum):
+    ANNOUNCE_NAME="ANNOUNCE"
+    SEND_VARIABLES="SEND_VARS"
+
+def parse_enum(enum_class, val):
+    try:
+        return enum_class(val)
+    except ValueError as e:
+        print("INVALID MSG_TYPE: ", val)
+        raise e
+
+def construct_msg(type: MessageType, content: str) -> str:
+    return f"{type.value}${len(content)}${content}"
 
 class SMPCSocket ():
-    def __init__ (self, address: str = "", is_listening_socket:bool=False):
-        if address == "":
-            self.ip = None
-            self.port = None
-            self.simulated = True
-        else:
-            self.simulated = False
-            self.ip, self.port = parse_address(address)
+    def __init__ (self):
+        self.ip = None
+        self.port = None
+        self.simulated = True
 
         # a buffer storing all received variables which have not been requested by the parrent class via
         # the receive variable function
@@ -45,20 +55,15 @@ class SMPCSocket ():
         self.smpc_socket_in_use = True
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
-
-        if not self.simulated and is_listening_socket:
-            # create the listening socket which will accept incomming connections and also read messages
-            self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.listening_socket.bind((self.ip, self.port))
-            # TODO remove magic number for backlog in listen
-            self.listening_socket.listen(5)
-            self.listening_thread = threading.Thread(target=self.start_listening)
-            self.listening_thread.start()
-        
-    def close_client_socket(self, client_sock: socket.socket):
-        client_sock.close()
-        del self.client_sockets[client_sock]
+        self.listening_thread = None
+    
+    def set_address(self, address: str):
+        """
+        Sets the address the party of this socket listens on.
+        Calling this method sets the SMPCSocket to start using actual sockets
+        """
+        self.simulated = False
+        self.ip, self.port = parse_address(address)
 
     def decode_received_msg(self, msg:str, sock: socket.socket):
         """ 
@@ -67,11 +72,17 @@ class SMPCSocket ():
         by sending their listening ip and port.
         """
         
-        parts = msg.split()
-        msg_type = parts[0]
+        
+        msg_type, msg_length, rest = msg.split('$', maxsplit=2)
+        msg_length = int(msg_length)
+        msg_content = rest[:msg_length]
+        additional_data = rest[msg_length:]
+
+        msg_type = parse_enum(MessageType, msg_type)
+
         match msg_type:
-            case "SEND_VARIABLES":
-                variables = parts[1:]
+            case MessageType.SEND_VARIABLES:
+                variables = msg_content.split()
                 var_names = []
                 values = []
                 for i in range(0, len(variables), 2):
@@ -85,14 +96,34 @@ class SMPCSocket ():
                     raise Exception("Received variables from unknown client socket")
                 self.put_variables_in_buffer(sender_addr, var_names, values)
             
-            case "ANNOUNCE_NAME":
-                ip, port = parse_address(parts[1])
+            case MessageType.ANNOUNCE_NAME:
+                ip, port = parse_address(msg_content)
                 self.client_sockets[sock] = stringify_address(ip,port)
             case _:
                 raise Exception(f"Received message starting with unknown message type {msg_type}")
         
-                
+        if additional_data:
+            # the data contained another message
+            self.decode_received_msg(additional_data, sock)
+    
     def start_listening(self):
+        """
+        Starts the listening thread of this socket.
+        """
+        # create the listening socket which will accept incomming connections and also read messages
+        self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listening_socket.bind((self.ip, self.port))
+        # TODO remove magic number for backlog in listen
+        self.listening_socket.listen(5)
+        self.listening_thread = threading.Thread(target=self.listen)
+        self.listening_thread.start()
+                
+    def listen(self):
+        if self.listening_socket is None:
+            # listen only gets called from the start_listening method which inits the listening socket
+            raise Exception()
+
         while self.smpc_socket_in_use:
             # TODO put the timeout as a setting (timeout needed so the socket stops if self.smpc_socket_in_use if false)
             client_socks = list(self.client_sockets.keys())
@@ -109,7 +140,15 @@ class SMPCSocket ():
                         msg = data.decode()
                         self.decode_received_msg(msg, socket)
                     else:
-                        self.close_client_socket(socket)
+                        pass
+                        # The client has closed their side of the socket
+       
+        # close all the connections
+        if not self.simulated and self.listening_socket:
+            for connection in self.client_sockets.keys():
+                connection.close()
+
+        self.listening_socket.close()
     
     def get_address(self) -> tuple[str, int]:
         if self.ip == None or self.port == None:
@@ -126,7 +165,8 @@ class SMPCSocket ():
                 self.client_sockets[new_client] = stringify_address(ip, port)
 
                 # announce who we are
-                message = f"ANNOUNCE_NAME {self.ip}:{self.port}"
+                msg_content =  f"{self.ip}:{self.port}"
+                message = construct_msg(MessageType.ANNOUNCE_NAME, msg_content)
                 new_client.sendall(message.encode())
                 return
             except (socket.timeout, ConnectionRefusedError):
@@ -159,13 +199,9 @@ class SMPCSocket ():
     """
     def close(self):
         self.smpc_socket_in_use = False
-        if not self.simulated and self.listening_socket:
+        # wait on the listening thread to clean everything up
+        if self.listening_thread is not None:
             self.listening_thread.join()
-            self.listening_socket.close()
-            for connection in self.client_sockets.keys():
-                connection.close()
-
-
         
 
     def put_variables_in_buffer (self, sender: str | SMPCSocket, variable_names: list[str], values: list[Any]):
@@ -229,16 +265,18 @@ class SMPCSocket ():
             addr = stringify_address(*receiver_socket.get_address())
 
             if addr not in self.client_sockets.values():
-                raise Exception(f"Client with listening address {addr} non connected")
+                raise Exception(f"Client with listening address {addr} not connected")
             
-            msg = "SEND_VARIABLES"
+            msg = ""
             # Add all the variables
             for var, val in zip(variable_names, values):
                 msg += f" {var} {json.dumps(val)}"
 
+            msg = construct_msg(MessageType.SEND_VARIABLES, msg)
             socket = get_key_by_value(self.client_sockets, addr)
             if socket == None:
                 # we have just checked that the addr exists so we know there will be a socket
                 raise Exception()
+            
             socket.sendall(msg.encode())
           
