@@ -5,7 +5,7 @@ import time
 
 if __name__ == "__main__":
     p = SecretShareMultiplication(l=32)
-    p.set_party_addresses({"Bob": "127.0.0.1:4854", "Alice": "127.0.0.1:4864"}, "Bob")
+    p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Bob")
     p.set_input({"Bob": {"b": 13}})
 
     p()

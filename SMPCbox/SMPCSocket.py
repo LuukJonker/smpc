@@ -55,10 +55,7 @@ class SMPCSocket ():
         self.smpc_socket_in_use = True
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
-        
-    def close_client_socket(self, client_sock: socket.socket):
-        client_sock.close()
-        del self.client_sockets[client_sock]
+        self.listening_thread = None
     
     def set_address(self, address: str):
         """
@@ -123,6 +120,10 @@ class SMPCSocket ():
         self.listening_thread.start()
                 
     def listen(self):
+        if self.listening_socket is None:
+            # listen only gets called from the start_listening method which inits the listening socket
+            raise Exception()
+
         while self.smpc_socket_in_use:
             # TODO put the timeout as a setting (timeout needed so the socket stops if self.smpc_socket_in_use if false)
             client_socks = list(self.client_sockets.keys())
@@ -139,7 +140,15 @@ class SMPCSocket ():
                         msg = data.decode()
                         self.decode_received_msg(msg, socket)
                     else:
-                        self.close_client_socket(socket)
+                        pass
+                        # The client has closed their side of the socket
+       
+        # close all the connections
+        if not self.simulated and self.listening_socket:
+            for connection in self.client_sockets.keys():
+                connection.close()
+
+        self.listening_socket.close()
     
     def get_address(self) -> tuple[str, int]:
         if self.ip == None or self.port == None:
@@ -190,13 +199,9 @@ class SMPCSocket ():
     """
     def close(self):
         self.smpc_socket_in_use = False
-        if not self.simulated and self.listening_socket:
+        # wait on the listening thread to clean everything up
+        if self.listening_thread is not None:
             self.listening_thread.join()
-            self.listening_socket.close()
-            for connection in self.client_sockets.keys():
-                connection.close()
-
-
         
 
     def put_variables_in_buffer (self, sender: str | SMPCSocket, variable_names: list[str], values: list[Any]):
@@ -260,7 +265,7 @@ class SMPCSocket ():
             addr = stringify_address(*receiver_socket.get_address())
 
             if addr not in self.client_sockets.values():
-                raise Exception(f"Client with listening address {addr} non connected")
+                raise Exception(f"Client with listening address {addr} not connected")
             
             msg = ""
             # Add all the variables
@@ -272,6 +277,6 @@ class SMPCSocket ():
             if socket == None:
                 # we have just checked that the addr exists so we know there will be a socket
                 raise Exception()
-
+            
             socket.sendall(msg.encode())
           
