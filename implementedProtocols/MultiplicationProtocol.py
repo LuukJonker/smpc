@@ -32,15 +32,15 @@ class SecretShareMultiplication(AbstractProtocol):
     def output_variables(self) -> dict[str, list[str]]:
         return {"Alice": ["x"], "Bob": ["y"]}
 
-    def __call__(self):
-        self.add_protocol_step("Generate r")
+    def protocol_definition(self):
+        self.add_comment("Generate r_0 to r_(l-1)")
         r_vars = ["r" + str(num) for num in range(self.l)]
         self.compute(self.parties["Alice"], r_vars, lambda: [rand_int() % pow(2, self.l) for _ in range(self.l)], "rand()")
 
         bob = self.parties["Bob"]
         alice = self.parties["Alice"]
 
-        self.add_protocol_step("Perform l OTs")
+        self.add_comment("Perform l OTs")
         for i in range(self.l):
             # calculate a*2^i + r_i:
             self.compute(alice, ["m1_input"], lambda: (alice["a"] * (2**i) + alice["r" + str(i)]) % pow(2, self.l), "a*2^i + r_i")
@@ -49,11 +49,11 @@ class SecretShareMultiplication(AbstractProtocol):
 
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
-            self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
+            self.add_subroutine_protocol(OT(), {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
         
         print(time.time())
 
-        self.add_protocol_step("Calculate outputs")
+        self.add_comment("Calculate final outputs")
 
         self.compute(alice, "x", lambda: (-sum(alice[var] for var in r_vars)) % pow(2, self.l), "minus Sum of all r_i")
 
@@ -64,8 +64,8 @@ class SecretShareMultiplication(AbstractProtocol):
 if __name__ == "__main__":
     p = SecretShareMultiplication(l=32)
     
-    p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Alice")
-    p.set_input({"Alice": {"a": 21}})
+    # p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Alice")
+    p.set_input({"Alice": {"a": 21}, "Bob": {"b": 93}})
     s = time.time()
     p()
     e = time.time()

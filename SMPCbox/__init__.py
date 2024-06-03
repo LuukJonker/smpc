@@ -1,5 +1,5 @@
-from .AbstractProtocol import AbstractProtocol, AbstractProtocolVisualiser
+from .AbstractProtocol import AbstractProtocol
 from .ProtocolParty import TrackedStatistics, ProtocolParty
 
 
-__all__ = ['AbstractProtocol', 'AbstractProtocolVisualiser', 'TrackedStatistics', 'ProtocolParty']
+__all__ = ['AbstractProtocol', 'TrackedStatistics', 'ProtocolParty']
