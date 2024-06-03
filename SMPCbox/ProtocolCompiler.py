@@ -12,7 +12,7 @@ def replace_variables(expression: str, variables: dict[str, Any]):
     variable_pattern = re.compile(r"\b[a-zA-Z_]\w*\b")
 
     # Function to replace a match with its corresponding value from the dictionary
-    def variable_replacer(match):
+    def variable_replacer(match: re.Match[str]):
         var_name = match.group(0)
         return str(variables.get(var_name, var_name))
 
@@ -190,7 +190,10 @@ class Computation(Step):
     def handle(self, all: list[ProtocolParty]) -> list[str]:  # type: ignore
         res = []
         for party in all:
-            res.append(self.all_computations[party.name].compute())
+            if party.name in self.all_computations:
+                res.append(self.all_computations[party.name].compute())
+            else:
+                res.append("")
 
         return res
 
@@ -335,6 +338,25 @@ class CompiledProtocol:
         self.output = {}
 
         self.indexes = {name: 0 for name in self.parties.keys()}
+
+    def set_input(self, input: dict[str, dict[str, Any]]):
+        self.input = input
+        self.compiled_protocol = self.protocol.compile()
+        self.steps = self.compiled_protocol.steps
+        for step in self.steps:
+            step.create_widget(self.gui)
+
+        inputs: list[list[str]] = []
+        for expected_vars in inp.values():
+            for i, var in enumerate(expected_vars):
+                if i >= len(inputs):
+                    inputs.append([])
+                inputs[i].append(var)
+
+        max_len = max(len(i) for i in inputs)
+        for i in inputs:
+            while len(i) < max_len:
+                i.append("")
 
     def add_step(self, step: Step):
         self.steps.append(step)

@@ -43,7 +43,6 @@ class Protocolvisualiser(AbstractProtocolVisualiser):
         for step in self.steps:
             step.create_widget(self.gui)
 
-
         # inputs: list[list[str]] = []
         # for expected_vars in inp.values():
         #     for i, var in enumerate(expected_vars):

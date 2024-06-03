@@ -315,6 +315,9 @@ class AbstractProtocol(ABC):
         This is used to visualise the protocol in a GUI.
         """
         self.compiled_protocol = CompiledProtocol(self.get_party_roles())
+
+        # TODO add the input
+
         self.compiling = True
         self()
         self.compiling = False

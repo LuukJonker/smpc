@@ -114,7 +114,8 @@ class Host(Client):
         self.server_socket.listen(5)
 
         threading.Thread(target=self.broadcast_announcement).start()
-        threading.Thread(target=self.heartbeat_check).start()
+        self.heartbeat_timer = threading.Timer(HEARTBEAT_INTERVAL, self.heartbeat_check)
+        self.heartbeat_timer.start()
 
         while True:
             peer_socket, address = self.server_socket.accept()
@@ -137,14 +138,12 @@ class Host(Client):
                 self.multicast_socket.sendto(info.encode(), (MCAST_GROUP, MCAST_PORT))
 
     def heartbeat_check(self):
-        while True:
-            time.sleep(HEARTBEAT_INTERVAL)
-            for participant in self.participants:
-                try:
-                    participant[0].send(HeartbeatMessage(self.port).encode())
-                except:
-                    self.participants.remove(participant)
-                    self.gui.remove_peer(participant[1][0])
+        for participant in self.participants:
+            try:
+                participant[0].send(HeartbeatMessage(self.port).encode())
+            except:
+                self.participants.remove(participant)
+                self.gui.remove_peer(participant[1][0])
 
     def listen_to_participant(self, peer_socket):
         while True:

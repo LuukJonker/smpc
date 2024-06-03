@@ -584,13 +584,16 @@ class MainWindow(QMainWindow):
 
     def add_send_step(
         self,
-        sender: int,
-        receiver: int,
+        sender: str,
+        receiver: str,
         from_variables: list[str],
         to_variables: list[str],
     ):
+        sender_pos = self.get_party_index(sender)
+        receiver_pos = self.get_party_index(receiver)
+
         widget = SendReceiveWidget(
-            self.num_parties, sender, receiver, from_variables, to_variables
+            self.num_parties, sender_pos, receiver_pos, from_variables, to_variables
         )
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
