@@ -2,11 +2,27 @@ from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.ProtocolStep import ProtocolStep
+from functools import wraps
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if type(var) == str else list(var)
     return list_var
 
+
+def local(name: str):
+    """
+    A decorator which a can be used to execute specific methods only if a certain
+    party is local.
+    """
+    def decorator(method):
+        @wraps(method)
+        def wrapper(self: AbstractProtocol, *args, **kwargs):
+            if self.is_local(name):
+                return method(self, *args, **kwargs)
+            else:
+                return None 
+        return wrapper
+    return decorator
 
 class AbstractProtocolVisualiser(ABC):
     @abstractmethod
