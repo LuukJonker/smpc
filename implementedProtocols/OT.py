@@ -55,7 +55,14 @@ class OT(AbstractProtocol):
 
         # Calculate v
         self.compute(p_recv, "k", lambda: (int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
-        self.compute(p_recv, "x_b", lambda: p_recv["x0"] if (p_recv["b"] == 0) else p_recv["x1"], "choose x_b")
+
+        if self.is_local("Receiver") and p_recv["b"] == 0:
+            # b is zero
+            self.compute(p_recv, "x_b", lambda: p_recv["x0"], "x0")
+        else:
+            # b is one
+            self.compute(p_recv, "x_b", lambda: p_recv["x1"], "x1")
+
         self.compute(p_recv, "v", lambda: ((p_recv["x_b"] + pow(p_recv["k"], p_recv["e"])) % p_recv["N"]), "(x_b + k^e) mod N")
         self.send_variables(p_recv, p_send, "v")
 
