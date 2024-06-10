@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 class TrackedStatistics():
     def __init__(self):
         self.execution_time: float = 0
+        self.execution_CPU_time: float = 0
         self.wait_time: float = 0
         self.messages_send: int = 0
         self.messages_received: int = 0
@@ -22,6 +23,7 @@ class TrackedStatistics():
         return f"""
         Statistics
         execution_time: {self.execution_time}
+        execution_CPU_time: {self.execution_CPU_time}
         wait_time: {self.wait_time}
         messages_send: {self.messages_send}
         bytes_send: {self.bytes_send}
@@ -31,6 +33,7 @@ class TrackedStatistics():
     def __add__(self, other_stats: TrackedStatistics) -> TrackedStatistics:
         res = TrackedStatistics()
         res.execution_time = self.execution_time + other_stats.execution_time
+        res.execution_CPU_time = self.execution_CPU_time + other_stats.execution_CPU_time
         res.wait_time = self.wait_time + other_stats.wait_time
         res.messages_send = self.messages_send + other_stats.messages_send
         res.messages_received = self.messages_received + other_stats.messages_received
@@ -85,9 +88,9 @@ class ProtocolParty ():
         if variable_name in self.not_yet_received_vars.keys():
             sender = self.not_yet_received_vars[variable_name]
             # request the variable from the socket
-            s_wait_time = time.time()
+            s_wait_time = time.perf_counter()
             value = self.socket.receive_variable(sender, variable_name)
-            e_wait_time = time.time()
+            e_wait_time = time.perf_counter()
 
             # add the received values bytes to the received bytes stat
             self.statistics.bytes_received += getsizeof(value)
@@ -111,10 +114,13 @@ class ProtocolParty ():
         computed_vars = [self.get_namespace() + name for name in computed_vars]
 
         # get the local variables
-        t_start = time.time()
+        t_start = time.perf_counter()
+        t_CPU_start = time.process_time()
         res = computation()
-        t_end = time.time()
+        t_CPU_end = time.process_time()
+        t_end = time.perf_counter()
         self.statistics.execution_time += t_end - t_start
+        self.statistics.execution_CPU_time += t_CPU_end - t_CPU_start
 
         # assign the output if there is just a single output variable
         if len(computed_vars) == 1:
