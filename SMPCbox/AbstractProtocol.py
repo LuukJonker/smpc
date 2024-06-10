@@ -204,6 +204,21 @@ class AbstractProtocol(ABC):
         other_parties.remove(self.parties[local_party_name])
         listening_socket.connect_to_parties(other_parties)
 
+    
+    def is_local(self, party_name: str) -> bool:
+        """
+        A method meant to be used by SMPCbox users to ensure save local variable accessing.
+        This method takes in a name of a party and returns wether this party is executed locally.
+        This allows for constructions such as:
+
+        if(self.is_local("Alice") and self.parties["Alice"]["b"] == 0):
+            # Do stuff if b is 0
+        else:
+            # Do stuff is b is 1
+
+        """
+        return self.is_local_party(self.parties[party_name])
+
     def is_local_party(self, party: ProtocolParty) -> bool:
         """
         A simple helper method which checks wether the provided party should perform its computations on this machine.
