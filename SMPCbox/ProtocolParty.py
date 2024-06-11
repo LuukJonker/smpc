@@ -52,8 +52,6 @@ class ProtocolParty ():
         self.statistics = TrackedStatistics()
         self.name = name
 
-        self.is_local = True
-
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
 
@@ -83,10 +81,13 @@ class ProtocolParty ():
     def __getitem__(self, key):
         # Allows to use [] to retrieve variables of a party.
         return self.get_variable(key)
+    
+    def is_local(self):
+        return self.socket.simulated or self.socket.listening_socket is not None
 
     def get_variable(self, variable_name: str):
-        if not self.is_local:
-            InvalidLocalVariableAccess(self.name, variable_name)
+        if not self.is_local():
+            raise InvalidLocalVariableAccess(self.name, variable_name)
             
         # handle the namespace
         variable_name = self.get_namespace() + variable_name

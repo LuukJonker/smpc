@@ -99,7 +99,7 @@ if __name__ == "__main__":
     #     print(stats)
 
     ot_protocol = OT()
-    ot_protocol.set_party_addresses({"Sender": "127.0.0.1:4850", "Receiver": "127.0.0.1:4860"}, "Receiver")
+    ot_protocol.set_party_addresses({"Sender": "127.0.0.1:4851", "Receiver": "127.0.0.1:4861"}, "Receiver")
     ot_protocol.set_input({"Receiver": {"b": 0}})
     ot_protocol()
     # for step in ot_protocol.protocol_steps:

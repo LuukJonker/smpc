@@ -202,7 +202,6 @@ class AbstractProtocol(ABC):
         for party_name, addr in addresses.items():
             self.check_name_exists(party_name)
             self.parties[party_name].socket.set_address(addr)
-            self.parties[party_name].is_local = False
 
         # spin up the local party
         self.check_name_exists(local_party_name)

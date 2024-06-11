@@ -37,7 +37,7 @@ class VariableNotReceived(SMPCboxError):
 
 class InvalidLocalVariableAccess(SMPCboxError):
     def __init__(self, non_local_party: str, variable: str):
-        super().__init__(f"Trying to access variable '{variable}' of non locally running party {non_local_party}")
+        super().__init__(f"Trying to access variable '{variable}' of non locally running party '{non_local_party}'")
 
 class NonExistentParty(SMPCboxError):
     def __init__(self, protocol_name: str, party: str):

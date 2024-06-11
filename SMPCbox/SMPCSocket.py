@@ -110,7 +110,6 @@ class SMPCSocket ():
         """
         Starts the listening thread of this socket.
         """
-        self.is_local = True
         # create the listening socket which will accept incomming connections and also read messages
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
