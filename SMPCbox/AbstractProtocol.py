@@ -227,18 +227,7 @@ class AbstractProtocol(ABC):
             # Do stuff is b is 1
 
         """
-        return self.is_local_party(self.parties[party_name])
-
-    def is_local_party(self, party: ProtocolParty) -> bool:
-        """
-        A simple helper method which checks wether the provided party should perform its computations on this machine.
-        This is the case if there is no runnning party set in which case all parties are simulated on this machine.
-        Or if the given party is the running party
-        """
-        if self.running_simulated:
-            return True
-        else:
-            return self.running_party == self.get_name_of_party(party)
+        return self.parties[party_name].is_local()
 
     def in_protocol_step(self):
         """
@@ -279,7 +268,7 @@ class AbstractProtocol(ABC):
         # Verify the existence of a current protocol step
         self.in_protocol_step()
 
-        if not self.is_local_party(computing_party):
+        if not computing_party.is_local():
             # We don't run computations for parties that aren't the running party when a running_party is specified (when running in distributed manner).
             return
 
@@ -331,14 +320,14 @@ class AbstractProtocol(ABC):
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
-        if self.is_local_party(sending_party):
+        if sending_party.is_local():
             sending_party.send_variables(receiving_party, variables)
             for var in variables:
                 variable_values[var] = sending_party.get_variable(var)
 
-        if self.is_local_party(receiving_party):
+        if receiving_party.is_local():
             receiving_party.receive_variables(sending_party, variables)
-            if not self.is_local_party(sending_party):
+            if not sending_party.is_local():
                 for var in variables:
                     # The variable is posibly not received yet.
                     variable_values[var] = None
@@ -404,13 +393,13 @@ class AbstractProtocol(ABC):
         Using the defined output variables from the output_variables method this method returns all the values of the output variables
         """
         output = {}
-        for role in self.output_variables().keys():
-            self.check_name_exists(role)
-            if not self.is_local_party(self.parties[role]):
+        for party in self.output_variables().keys():
+            self.check_name_exists(party)
+            if not self.parties[party].is_local():
                 continue
-            output[role] = {}
-            for var in self.output_variables()[role]:
-                output[role][var] = self.parties[role].get_variable(var)
+            output[party] = {}
+            for var in self.output_variables()[party]:
+                output[party][var] = self.parties[party].get_variable(var)
 
         return output
 
@@ -477,28 +466,28 @@ class AbstractProtocol(ABC):
         input_values = {}
         # used for visualisation
         input_var_mapping = {}
-        for role in inputs.keys():
-            protocol.check_name_exists(role)
-            party = role_assignments[role]
+        for party_name in inputs.keys():
+            protocol.check_name_exists(party_name)
+            party = role_assignments[party_name]
 
-            if not self.is_local_party(party):
+            if not party.is_local():
                 # No need to set the input of non local parties
                 continue
 
             # get the values for each of the input variables.
-            input_values[role] = {}
-            input_var_mapping[role] = {}
+            input_values[party_name] = {}
+            input_var_mapping[party_name] = {}
 
             # we assume the user provided correct input. If not the set
-            for input_var_name, provided_var in inputs[role].items():
+            for input_var_name, provided_var in inputs[party_name].items():
                 # Set the input variable
-                if self.is_local_party(party):
-                    input_values[role][input_var_name] = role_assignments[
-                        role
+                if party.is_local():
+                    input_values[party_name][input_var_name] = role_assignments[
+                        party_name
                     ].get_variable(provided_var)
-                    input_var_mapping[role][input_var_name] = provided_var
+                    input_var_mapping[party_name][input_var_name] = provided_var
 
-            party = role_assignments[role]
+            party = role_assignments[party_name]
 
         # comunicate to the participating parties that they are entering a subroutine
         for party in role_assignments.values():
@@ -541,7 +530,7 @@ class AbstractProtocol(ABC):
         # now assign the output variables (not with the subroutine prefix _name_[var_name])
         for role in subroutine_output.keys():
             party = role_assignments[role]
-            if not self.is_local_party(party):
+            if not party.is_local():
                 # No need to set the output of non local parties
                 continue
 
