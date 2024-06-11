@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.ProtocolStep import ProtocolStep
+from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput
 from functools import wraps
 
 def convert_to_list(var: Union[str, list[str]]):
@@ -163,10 +164,8 @@ class AbstractProtocol(ABC):
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
 
-        # instantiate all the ProtocolParty classes with the default name of the role.
-        # These might be overwritten if the user sets them later.
-        for role in self.get_party_names():
-            self.parties[role] = ProtocolParty()
+        for name in self.get_party_names():
+            self.parties[name] = ProtocolParty(name)
 
     def set_protocol_visualiser(self, visualiser: AbstractProtocolVisualiser):
         """
@@ -186,11 +185,9 @@ class AbstractProtocol(ABC):
 
     def check_name_exists(self, name: str):
         if name not in self.get_party_names():
-            raise Exception(
-                f'The party name "{name}" does not exist in the protocol "{self.protocol_name}"'
-            )
+            raise NonExistentParty(self.protocol_name, name)
 
-    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str | None):
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str):
         """
         This method sets the protocol to run distributedly. This method expects two arguments:
 
@@ -205,9 +202,6 @@ class AbstractProtocol(ABC):
         for party_name, addr in addresses.items():
             self.check_name_exists(party_name)
             self.parties[party_name].socket.set_address(addr)
-
-        if local_party_name is None:
-            return
 
         # spin up the local party
         self.check_name_exists(local_party_name)
@@ -380,22 +374,20 @@ class AbstractProtocol(ABC):
         This method also checks wether the provided input is correct according to the get_expected_input method
         """
         expected_vars = self.get_expected_input()
-        for role in inputs.keys():
-            self.check_name_exists(role)
+        for party in inputs.keys():
+            self.check_name_exists(party)
 
             # check wether the inputs are provided correctly for each role
-            if set(expected_vars[role]) != set(inputs[role].keys()):
-                expected_set = set(expected_vars[role])
-                given_set = set(inputs[role].keys())
-                raise Exception(
-                    f"""The inputs for the role \"{role}\" in the protocol \"{self.protocol_name}\" are incorrect.\n
-                                    Missing variables {expected_set.difference(given_set)}\n
-                                    Provided non existent input variables {given_set.difference(expected_set)}"""
-                )
+            if set(expected_vars[party]) != set(inputs[party].keys()):
+                expected_set = set(expected_vars[party])
+                given_set = set(inputs[party].keys())
+                missing_vars = expected_set.difference(given_set)
+                non_existend_vars = given_set.difference(expected_set)
+                raise InvalidProtocolInput(party, list(missing_vars), list(non_existend_vars))
 
             # Set the inputs
-            for var in inputs[role].keys():
-                self.parties[role].set_local_variable(var, inputs[role][var])
+            for var in inputs[party].keys():
+                self.parties[party].set_local_variable(var, inputs[party][var])
 
     @abstractmethod
     def output_variables(self) -> dict[str, list[str]]:

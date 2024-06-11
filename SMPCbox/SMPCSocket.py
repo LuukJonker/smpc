@@ -6,6 +6,7 @@ import json
 import select
 import time
 from enum import Enum
+from SMPCbox.exceptions import UnableToConnect
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
@@ -37,7 +38,6 @@ def parse_enum(enum_class, val):
     try:
         return enum_class(val)
     except ValueError as e:
-        print("INVALID MSG_TYPE: ", val)
         raise e
 
 def construct_msg(type: MessageType, content: str) -> str:
@@ -174,7 +174,7 @@ class SMPCSocket ():
                 continue
         
         # connection was unsucessfull
-        raise Exception(f"Unable to connect to party {ip}:{port}")
+        raise UnableToConnect(ip, port)
                 
         
     
@@ -227,13 +227,11 @@ class SMPCSocket ():
 
     """
     This function returns the variable received from the sender with the specified variable name.
-    If this variable is not received from the sender then an Exception is raised.
+    If this variable is not received from the sender then None is returned
     """
     def receive_variable(self, sender: 'ProtocolParty', variable_name: str, timeout: float = 10) -> Any:
         if self.simulated:
             value = self.get_variable_from_buffer(sender.socket, variable_name)
-            if value == None:
-                raise Exception(f"The variable \"{variable_name}\" has not been received")
             return value
         else:
             # we keep checking untill the listening socket has put the message into the queue
@@ -249,8 +247,8 @@ class SMPCSocket ():
                     # no need to wait for network delay since were simulating it all
                     break
                 time.sleep(0.1)
-    
-            raise Exception(f"The variable \"{variable_name}\" has not been received")
+            
+            return None
 
     """
     This function sends the variable to this socket. 

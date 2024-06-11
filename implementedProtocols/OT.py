@@ -66,26 +66,29 @@ class OT(AbstractProtocol):
         self.compute(p_send, "m1_enc", lambda: ((p_send["m1"] + p_send["k1"]) % p_send["N"]), "(m1 + k1) mod N")
         self.send_variables(p_send, p_recv, ["m0_enc", "m1_enc"])
 
+        print(p_recv.is_local())
+        p_recv["b"]
+
         self.compute(p_recv, "mb_enc", lambda: (p_recv["m0_enc"] if (p_recv["b"] == 0) else p_recv["m1_enc"]), "choose m_b")
         self.compute(p_recv, "mb", lambda: ((p_recv["mb_enc"] - p_recv["k"]) % p_recv["N"]), "(m'_b - k) mod N")
 
 
 if __name__ == "__main__":
-    ot_protocol = OT()
-
-    ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
-    s = time.time()
-    ot_protocol()
-    e = time.time()
-    print("OT time", e-s)
-    for role, stats in ot_protocol.get_party_statistics().items():
-        print(role)
-        print(stats)
-
     # ot_protocol = OT()
-    # ot_protocol.set_party_addresses({"Sender": "127.0.0.1:4850", "Receiver": "127.0.0.1:4860"}, "Sender")
-    # ot_protocol.set_input({"Sender": {"m0": 21, "m1": 39}})
+
+    # ot_protocol.set_input({"Sender": {"m0": 1, "m1": 29}, "Receiver": {"b": 1}})
+    # s = time.time()
     # ot_protocol()
+    # e = time.time()
+    # print("OT time", e-s)
+    # for role, stats in ot_protocol.get_party_statistics().items():
+    #     print(role)
+    #     print(stats)
+
+    ot_protocol = OT()
+    ot_protocol.set_party_addresses({"Sender": "127.0.0.1:4858", "Receiver": "127.0.0.1:4868"}, "Sender")
+    ot_protocol.set_input({"Sender": {"m0": 21, "m1": 39}})
+    ot_protocol()
     # for step in ot_protocol.protocol_steps:
     #     for opp in step.step_description:
     #         print(opp.__str__())

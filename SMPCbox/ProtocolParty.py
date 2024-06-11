@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable, Union, TYPE_CHECKING
 from SMPCbox.SMPCSocket import SMPCSocket
+from SMPCbox.exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
 import time
 from sys import getsizeof
 
@@ -42,13 +43,14 @@ class TrackedStatistics():
         return res
 
 class ProtocolParty ():
-    def __init__(self):
+    def __init__(self, name: str):
         """
         Instantiates a ProtocolParty.
         """
         self.socket = SMPCSocket()
         self.__local_variables: dict[str, Any] = {}
         self.statistics = TrackedStatistics()
+        self.name = name
 
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
@@ -79,8 +81,14 @@ class ProtocolParty ():
     def __getitem__(self, key):
         # Allows to use [] to retrieve variables of a party.
         return self.get_variable(key)
+    
+    def is_local(self):
+        return self.socket.simulated or self.socket.listening_socket is not None
 
     def get_variable(self, variable_name: str):
+        if not self.is_local():
+            raise InvalidLocalVariableAccess(self.name, variable_name)
+            
         # handle the namespace
         variable_name = self.get_namespace() + variable_name
 
@@ -91,6 +99,8 @@ class ProtocolParty ():
             s_wait_time = time.perf_counter()
             value = self.socket.receive_variable(sender, variable_name)
             e_wait_time = time.perf_counter()
+            if value == None:
+                raise VariableNotReceived(sender.name, variable_name)
 
             # add the received values bytes to the received bytes stat
             self.statistics.bytes_received += getsizeof(value)
@@ -101,8 +111,8 @@ class ProtocolParty ():
             # the variable has now been received
             del self.not_yet_received_vars[variable_name]
 
-        if not variable_name in self.__local_variables.keys():
-            raise Exception(f"Trying to get non existend variable \"{variable_name}\"")
+        if variable_name not in self.__local_variables.keys():
+            raise NonExistentVariable(self.name, variable_name)
         
         return self.__local_variables[variable_name]
 
@@ -129,7 +139,7 @@ class ProtocolParty ():
         
         # check if enough values are returned 
         if len(res) != len(computed_vars):
-            raise Exception (f"The computation with description \"{description}\" returns {len(res)} output value(s), but is trying to assign to {len(computed_vars)} variable(s)!")
+            IncorrectComputationResultDimension(description, res, len(computed_vars))
         
         # assign the values
         for i, var in enumerate(computed_vars):
