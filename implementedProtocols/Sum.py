@@ -28,7 +28,6 @@ class Sum(AbstractProtocol):
         return {"party_0":["sum"]}
     
     def __call__(self):
-        self.add_protocol_step()
         party_0 = self.parties["party_0"]
         self.compute(party_0, "r", rand, "rand()")
         self.compute(party_0, "accum", lambda: party_0["r"] + party_0["value"], "r + value")
