@@ -33,14 +33,12 @@ class SecretShareMultiplication(AbstractProtocol):
         return {"Alice": ["x"], "Bob": ["y"]}
 
     def __call__(self):
-        self.add_protocol_step("Generate r")
         r_vars = ["r" + str(num) for num in range(self.l)]
         self.compute(self.parties["Alice"], r_vars, lambda: [rand_int() % pow(2, self.l) for _ in range(self.l)], "rand()")
 
         bob = self.parties["Bob"]
         alice = self.parties["Alice"]
 
-        self.add_protocol_step("Perform l OTs")
         for i in range(self.l):
             # calculate a*2^i + r_i:
             self.compute(alice, ["m1_input"], lambda: (alice["a"] * (2**i) + alice["r" + str(i)]) % pow(2, self.l), "a*2^i + r_i")
@@ -52,8 +50,6 @@ class SecretShareMultiplication(AbstractProtocol):
             self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
         
         print(time.time())
-
-        self.add_protocol_step("Calculate outputs")
 
         self.compute(alice, "x", lambda: (-sum(alice[var] for var in r_vars)) % pow(2, self.l), "minus Sum of all r_i")
 

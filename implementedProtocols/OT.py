@@ -47,7 +47,6 @@ class OT(AbstractProtocol):
         p_send = self.parties["Sender"]
         p_recv = self.parties["Receiver"]
 
-        self.add_protocol_step("OT step")
         self.compute(p_send, ["N", "d", "e"], getRSAvars, "RSA()")
         self.send_variables(p_send, p_recv, ["N", "e"])
         self.compute(p_send, ["x0", "x1"], lambda: (int.from_bytes(os.urandom(16), byteorder='big'), int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
