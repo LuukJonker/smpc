@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
-from SMPCbox.ProtocolStep import ProtocolStep
 from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput
 from functools import wraps
 
@@ -155,7 +154,6 @@ class AbstractProtocol(ABC):
 
         self.parties: dict[str, ProtocolParty] = {}
         self.running_party = None
-        self.protocol_steps: list[ProtocolStep] = []
         self.protocol_output: dict[str, dict[str, Any]] = {}
         self.visualiser: AbstractProtocolVisualiser = EmptyVisualiser()
 
@@ -229,17 +227,6 @@ class AbstractProtocol(ABC):
         """
         return self.parties[party_name].is_local()
 
-    def in_protocol_step(self):
-        """
-        A helper method that checks wether the last item in self.protocol_steps is an instance
-        of the ProtocolStep class and not a ProtocolSubroutine.
-        This is used to ensure that any ProtocolOpperations being added have a ProtocolStep in which they can be added
-        """
-        if len(self.protocol_steps) == 0:
-            raise Exception(
-                "No protocol step defined to add a protocol opperation to.\nTo add a protocol step call the add_protocol_step method!"
-            )
-
     def get_name_of_party(self, party: ProtocolParty):
         """
         Retreives the name of the given party in the current protocol
@@ -265,9 +252,6 @@ class AbstractProtocol(ABC):
 
         computed_vars = convert_to_list(computed_vars)
 
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
-
         if not computing_party.is_local():
             # We don't run computations for parties that aren't the running party when a running_party is specified (when running in distributed manner).
             return
@@ -288,16 +272,6 @@ class AbstractProtocol(ABC):
             description
         )
 
-    def add_protocol_step(self, step_name: str = ""):
-        """
-        Declares the start of a new round/step of the protocol.
-        Any calls to run_computation after a call to this method will be ran as part of this step.
-        """
-        if step_name == "":
-            step_name = f"step_{len(self.protocol_steps) + 1}"
-
-        self.protocol_steps.append(ProtocolStep(step_name))
-
     def send_variables(
         self,
         sending_party: ProtocolParty,
@@ -312,8 +286,6 @@ class AbstractProtocol(ABC):
         Note that the variables argument can be both a single string and a list of strings in case more than one
         variable is send
         """
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
 
         # in the case that the variables is just a single string convert it to a list
         variables = convert_to_list(variables)
@@ -414,9 +386,6 @@ class AbstractProtocol(ABC):
         self.broadcasting = True
 
         variables = convert_to_list(variables)
-
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
 
         for receiver in self.parties.values():
             if receiver == broadcasting_party:
@@ -574,13 +543,6 @@ class AbstractProtocol(ABC):
             total_stats += party_stats
         
         return total_stats
-
-    def get_protocol_steps(self) -> list[ProtocolStep]:
-        """
-        Retrieves all of the protocol steps containing the opperations performed by the protocol.
-        If the protocol has not yet been called this returns an empty list.
-        """
-        return self.protocol_steps
 
     def terminate_protocol(self):
         """
