@@ -190,13 +190,17 @@ class AbstractProtocol(ABC):
         if name not in self.get_party_names():
             raise NonExistentParty(self.protocol_name, name)
 
-    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str):
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str, connection_timeout=60):
         """
         This method sets the protocol to run distributedly. This method expects two arguments:
 
         addresses: a dictionary containing for each party name an address ("ip:port") on which 
                    that party will be listening. 
         local_party_name: the name of the party to run locally on this machine
+
+        connection_timeout: The timeout used for the connection process to each of the clients.
+                            If set to None, no timeout is used and this method will block untill a connection is established.
+                            (max. waiting time is (num_parties-1) * connection_timeout).
         """
 
         self.running_simulated = False
@@ -215,7 +219,7 @@ class AbstractProtocol(ABC):
         listening_socket.start_listening()
         other_parties: list[ProtocolParty] = list(self.parties.values())
         other_parties.remove(self.parties[local_party_name])
-        listening_socket.connect_to_parties(other_parties)
+        listening_socket.connect_to_parties(other_parties, connection_timeout)
 
     
     def is_local(self, party_name: str) -> bool:

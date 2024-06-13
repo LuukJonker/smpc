@@ -159,7 +159,7 @@ class SMPCSocket ():
     def connect_to_client(self, ip: str, port: int, timeout: float = 10):
         new_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         start = time.time()
-        while (time.time() - start) < timeout:
+        while timeout == None or (time.time() - start) < timeout:
             try: 
                 new_client.connect((ip, port))
                 self.client_sockets[new_client] = stringify_address(ip, port)
@@ -178,7 +178,7 @@ class SMPCSocket ():
                 
         
     
-    def connect_to_parties(self, other_parties: list[ProtocolParty]):
+    def connect_to_parties(self, other_parties: list[ProtocolParty], timeout=60):
         """
         Establishes a connection with all the provided SMPCSocket
         """
@@ -189,7 +189,7 @@ class SMPCSocket ():
         for party in other_parties:
             ip, port = party.socket.get_address()
             if stringify_address(ip, port) not in self.client_sockets:
-                self.connect_to_client(ip, port)
+                self.connect_to_client(ip, port, timeout=timeout)
             
     
     """
