@@ -1,13 +1,18 @@
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
-from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput
+from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
 from functools import wraps
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if type(var) == str else list(var)
     return list_var
 
+def check_var_names(names: list[str]):
+    """Checks wether a name starts with an '_' and returns false if that is the case"""
+    for name in names:
+        if name.startswith('_'):
+            raise InvalidVariableName(name)
 
 def local(name: str):
     """
@@ -185,13 +190,17 @@ class AbstractProtocol(ABC):
         if name not in self.get_party_names():
             raise NonExistentParty(self.protocol_name, name)
 
-    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str):
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str, connection_timeout=60):
         """
         This method sets the protocol to run distributedly. This method expects two arguments:
 
         addresses: a dictionary containing for each party name an address ("ip:port") on which 
                    that party will be listening. 
         local_party_name: the name of the party to run locally on this machine
+
+        connection_timeout: The timeout used for the connection process to each of the clients.
+                            If set to None, no timeout is used and this method will block untill a connection is established.
+                            (max. waiting time is (num_parties-1) * connection_timeout).
         """
 
         self.running_simulated = False
@@ -210,22 +219,22 @@ class AbstractProtocol(ABC):
         listening_socket.start_listening()
         other_parties: list[ProtocolParty] = list(self.parties.values())
         other_parties.remove(self.parties[local_party_name])
-        listening_socket.connect_to_parties(other_parties)
+        listening_socket.connect_to_parties(other_parties, connection_timeout)
 
     
-    def is_local(self, party_name: str) -> bool:
+    def is_local(self, party: ProtocolParty) -> bool:
         """
         A method meant to be used by SMPCbox users to ensure save local variable accessing.
         This method takes in a name of a party and returns wether this party is executed locally.
         This allows for constructions such as:
 
-        if(self.is_local("Alice") and self.parties["Alice"]["b"] == 0):
+        if(self.is_local(self.parties["Alice"]) and self.parties["Alice"]["b"] == 0):
             # Do stuff if b is 0
         else:
             # Do stuff is b is 1
 
         """
-        return self.parties[party_name].is_local()
+        return party.is_local()
 
     def get_name_of_party(self, party: ProtocolParty):
         """
@@ -251,6 +260,7 @@ class AbstractProtocol(ABC):
         """
 
         computed_vars = convert_to_list(computed_vars)
+        check_var_names(computed_vars)
 
         if not computing_party.is_local():
             # We don't run computations for parties that aren't the running party when a running_party is specified (when running in distributed manner).
@@ -287,8 +297,11 @@ class AbstractProtocol(ABC):
         variable is send
         """
 
+
+
         # in the case that the variables is just a single string convert it to a list
         variables = convert_to_list(variables)
+        check_var_names(variables)
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
@@ -348,6 +361,7 @@ class AbstractProtocol(ABC):
 
             # Set the inputs
             for var in inputs[party].keys():
+                check_var_names([var])
                 self.parties[party].set_local_variable(var, inputs[party][var])
 
     @abstractmethod
@@ -371,6 +385,7 @@ class AbstractProtocol(ABC):
                 continue
             output[party] = {}
             for var in self.output_variables()[party]:
+                check_var_names([var])
                 output[party][var] = self.parties[party].get_variable(var)
 
         return output
@@ -386,6 +401,7 @@ class AbstractProtocol(ABC):
         self.broadcasting = True
 
         variables = convert_to_list(variables)
+        check_var_names(variables)
 
         for receiver in self.parties.values():
             if receiver == broadcasting_party:

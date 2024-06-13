@@ -55,7 +55,7 @@ class OT(AbstractProtocol):
         # Calculate v
         self.compute(p_recv, "k", lambda: (int.from_bytes(os.urandom(16), byteorder='big')), "rand()")
 
-        if self.is_local("Receiver") and p_recv["b"] == 0:
+        if self.is_local(p_recv) and p_recv["b"] == 0:
             self.compute(p_recv, "x_b", lambda: p_recv["x0"], "x_0")
         else: 
             self.compute(p_recv, "x_b", lambda: p_recv["x1"], "x_1")
