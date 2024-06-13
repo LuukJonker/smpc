@@ -65,9 +65,6 @@ class OT(AbstractProtocol):
         self.compute(p_send, "m1_enc", lambda: ((p_send["m1"] + p_send["k1"]) % p_send["N"]), "(m1 + k1) mod N")
         self.send_variables(p_send, p_recv, ["m0_enc", "m1_enc"])
 
-        print(p_recv.is_local())
-        p_recv["b"]
-
         self.compute(p_recv, "mb_enc", lambda: (p_recv["m0_enc"] if (p_recv["b"] == 0) else p_recv["m1_enc"]), "choose m_b")
         self.compute(p_recv, "mb", lambda: ((p_recv["mb_enc"] - p_recv["k"]) % p_recv["N"]), "(m'_b - k) mod N")
 
