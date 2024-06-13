@@ -17,6 +17,8 @@ class TestResult:
         self.reported_execution_time: tuple[float, float] = (0,0)
         self.reported_CPU_time: tuple[float, float] = (0,0)
         self.reported_wait_time: tuple[float, float] = (0,0)
+        self.send_msgs = 0
+        self.send_bytes = 0
         self.reported_energy_consumption: tuple[float, float] = (0,0)
 
         # Total measured for the call to the protocol
@@ -45,10 +47,15 @@ def compile_test_result(stats: list[TrackedStatistics], measured_times: list[flo
     reported_execution_times = [stats.execution_time for stats in stats]
     reported_CPU_times = [stats.execution_CPU_time for stats in stats]
     reported_wait_times = [stats.wait_time for stats in stats]
+    num_send_msgs = [stats.messages_send for stats in stats]
+    num_send_bytes = [stats.messages_send for stats in stats]
     
     test_result.reported_execution_time = (mean(reported_execution_times), stdev(reported_execution_times))
     test_result.reported_wait_time = (mean(reported_wait_times), stdev(reported_wait_times))
     test_result.reported_CPU_time = (mean(reported_CPU_times), stdev(reported_CPU_times))
+
+    test_result.send_msgs = int(mean(num_send_msgs))
+    test_result.send_bytes = int(mean(num_send_bytes))
 
     test_result.total_CPU_time = (mean(measured_CPU_times), stdev(measured_CPU_times))
     test_result.total_execution_time = (mean(measured_times), stdev(measured_times))
@@ -166,6 +173,8 @@ def get_result_dict() ->  dict[str, list[float]]:
     d["reported_energy_consumption_std"] = []
     d["total_execution_time_avg"] = []
     d["total_execution_time_std"] = []
+    d["num_send_msgs"] = []
+    d["num_send_bytes"] = []
     d["total_CPU_time_avg"] = []
     d["total_CPU_time_std"] = []
     d["total_energy_consumption_avg"] = []
@@ -179,6 +188,8 @@ def add_result(d: dict[str, list[float]], new_res: TestResult):
     d["reported_CPU_time_std"].append(new_res.reported_CPU_time[1])
     d["reported_wait_time_avg"].append(new_res.reported_wait_time[0])
     d["reported_wait_time_std"].append(new_res.reported_wait_time[1])
+    d["num_send_msgs"].append(new_res.send_msgs)
+    d["num_send_bytes"].append(new_res.send_bytes)
     d["reported_energy_consumption_avg"].append(new_res.reported_energy_consumption[0])
     d["reported_energy_consumption_std"].append(new_res.reported_energy_consumption[1])
     d["total_execution_time_avg"].append(new_res.total_execution_time[0])
@@ -225,6 +236,7 @@ def run_distributed_sum_test(min_parties, max_parties):
     pd.DataFrame(results).to_csv("distributedSumTest.csv")
 
 run_distributed_sum_test(2, 50)
+print("RUN SIMULATED TEST")
 # run_simulated_sum_test(2, 500)
 # print(run_protocol_distributed(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}))
 
