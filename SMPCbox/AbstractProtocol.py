@@ -1,8 +1,14 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Union, Callable, Any, Type
+from typing import Union, Callable, Any, TYPE_CHECKING
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
 from functools import wraps
+
+if TYPE_CHECKING:
+    from AbstractProtocol import AbstractProtocol
+
+
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if type(var) == str else list(var)
@@ -419,7 +425,7 @@ class AbstractProtocol(ABC):
 
     def run_subroutine_protocol(
         self,
-        protocol_class: Type["AbstractProtocol"],
+        protocol: AbstractProtocol,
         role_assignments: dict[str, ProtocolParty],
         inputs: dict[str, dict[str, str]],
         output_vars: dict[str, dict[str, str]],
@@ -437,8 +443,7 @@ class AbstractProtocol(ABC):
 
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
-
-        protocol = protocol_class()
+        
         protocol.set_protocol_parties(role_assignments)
 
         role_assignments_names = {
