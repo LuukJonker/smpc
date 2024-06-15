@@ -26,7 +26,7 @@ class SecretShareMultiplication(AbstractProtocol):
     def input_variables(self):
         return {"Alice": ["a"], "Bob": ["b"]}
 
-    def get_party_names(self) -> list[str]:
+    def party_names(self) -> list[str]:
         return ["Alice", "Bob"]
 
     def output_variables(self) -> dict[str, list[str]]:

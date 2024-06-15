@@ -28,7 +28,7 @@ def local(name: str):
     def decorator(method):
         @wraps(method)
         def wrapper(self: AbstractProtocol, *args, **kwargs):
-            if self.is_local(name):
+            if self.is_local(self.parties[name]):
                 return method(self, *args, **kwargs)
             else:
                 return None 
@@ -173,7 +173,7 @@ class AbstractProtocol(ABC):
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
 
-        for name in self.get_party_names():
+        for name in self.party_names():
             self.parties[name] = ProtocolParty(name)
 
     def set_protocol_visualiser(self, visualiser: AbstractProtocolVisualiser):
@@ -184,7 +184,7 @@ class AbstractProtocol(ABC):
         self.visualiser = visualiser
 
     @abstractmethod
-    def get_party_names(self) -> list[str]:
+    def party_names(self) -> list[str]:
         """
         Returns an ordered list of the names of each party in the protocol
         For example for oblivious transfer the roles could be
@@ -193,7 +193,7 @@ class AbstractProtocol(ABC):
         pass
 
     def check_name_exists(self, name: str):
-        if name not in self.get_party_names():
+        if name not in self.party_names():
             raise NonExistentParty(self.protocol_name, name)
 
     def set_party_addresses(self, addresses: dict[str, str], local_party_name: str, connection_timeout=60):
@@ -547,7 +547,7 @@ class AbstractProtocol(ABC):
         This method should NOT be used by users of SMPCbox. Method is used internally
         """
 
-        if set(role_assignments.keys()) != set(self.get_party_names()):
+        if set(role_assignments.keys()) != set(self.party_names()):
             raise Exception(
                 "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
             )

@@ -157,7 +157,7 @@ def run_distributed_once(start_port, parties, protocol_class, protocol_input, in
 
 def run_protocol_distributed(protocol_class: Type[AbstractProtocol], protocol_input: dict[str, dict[str, Any]], num_repeats=10, init_args=(), start_port=10000) -> TestResult:
     protocol = protocol_class(*init_args)
-    parties = protocol.get_party_names()
+    parties = protocol.party_names()
 
     results: list[DistributedTestStats] = []
 

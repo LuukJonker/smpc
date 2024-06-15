@@ -37,7 +37,7 @@ class OT(AbstractProtocol):
     def input_variables(self) -> dict[str, list[str]]:
         return {"Sender":["m0","m1"],"Receiver":["b"]}
     
-    def get_party_names(self) -> list[str]:
+    def party_names(self) -> list[str]:
         return ["Sender", "Receiver"]
     
     def output_variables(self) -> dict[str, list[str]]:
