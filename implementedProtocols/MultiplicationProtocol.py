@@ -23,7 +23,7 @@ class SecretShareMultiplication(AbstractProtocol):
         self.l = l
         super().__init__()
 
-    def get_expected_input(self):
+    def input_variables(self):
         return {"Alice": ["a"], "Bob": ["b"]}
 
     def get_party_names(self) -> list[str]:

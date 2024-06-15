@@ -338,7 +338,7 @@ class AbstractProtocol(ABC):
         pass
 
     @abstractmethod
-    def get_expected_input(self) -> dict[str, list[str]]:
+    def input_variables(self) -> dict[str, list[str]]:
         """
         A protocol must specify what the expected inputs for each party should be.
         Note that the keys of the dictionary are roles as specified by the get_party_roles method
@@ -347,13 +347,13 @@ class AbstractProtocol(ABC):
 
     def set_input(self, inputs: dict[str, dict[str, Any]]):
         """
-        Sets the inputs for the protocols (all inputs specified by get_expected_input) should be given
+        Sets the inputs for the protocols (all inputs specified by input_variables) should be given
         If set_running_party has been called only the input for that party needs to be given
         If the protocol is not run distributed then the inputs for all the parties should be provided.
 
-        This method also checks wether the provided input is correct according to the get_expected_input method
+        This method also checks wether the provided input is correct according to the input_variables method
         """
-        expected_vars = self.get_expected_input()
+        expected_vars = self.input_variables()
         for party in inputs.keys():
             self.check_name_exists(party)
 
@@ -443,7 +443,7 @@ class AbstractProtocol(ABC):
 
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
-        
+
         protocol.set_protocol_parties(role_assignments)
 
         role_assignments_names = {

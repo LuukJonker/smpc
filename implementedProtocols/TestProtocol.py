@@ -18,7 +18,7 @@ class Sum(AbstractProtocol):
     def get_party_names(self) -> list[str]:
         return [f"party_{i}" for i in range(self.num_parties)]
     
-    def get_expected_input(self) -> dict[str, list[str]]:
+    def input_variables(self) -> dict[str, list[str]]:
         input_vars = {}
         for name in self.get_party_names():
             input_vars[name] = ["value"]
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         val = random.randint(10, 10000)
         input[f"party_{i}"] = {"value": val}
         real_sum += val
-    # print(protocol.get_party_names(), protocol.get_expected_input(), protocol.output_variables())
+    # print(protocol.get_party_names(), protocol.input_variables(), protocol.output_variables())
     protocol.set_input(input)
     protocol()
     print(protocol.get_output())

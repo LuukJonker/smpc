@@ -34,7 +34,7 @@ class OT(AbstractProtocol):
     def __init__(self):
         super().__init__()
 
-    def get_expected_input(self) -> dict[str, list[str]]:
+    def input_variables(self) -> dict[str, list[str]]:
         return {"Sender":["m0","m1"],"Receiver":["b"]}
     
     def get_party_names(self) -> list[str]:
