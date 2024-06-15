@@ -47,9 +47,7 @@ class SecretShareMultiplication(AbstractProtocol):
 
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
-            self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
-        
-        print(time.time())
+            self.run_subroutine_protocol(OT(), {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
 
         self.compute(alice, "x", lambda: (-sum(alice[var] for var in r_vars)) % pow(2, self.l), "minus Sum of all r_i")
 

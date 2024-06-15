@@ -36,6 +36,8 @@ class TestResult:
             CPU_time: {self.reported_CPU_time}
             wait_time: {self.reported_wait_time}
             energy_consumption: {self.reported_energy_consumption}
+            send_msgs: {self.send_msgs}
+            bytes_send: {self.send_bytes}
         
         Measured stats for protocol call:
             execution_time: {self.total_execution_time}
@@ -48,7 +50,7 @@ def compile_test_result(stats: list[TrackedStatistics], measured_times: list[flo
     reported_CPU_times = [stats.execution_CPU_time for stats in stats]
     reported_wait_times = [stats.wait_time for stats in stats]
     num_send_msgs = [stats.messages_send for stats in stats]
-    num_send_bytes = [stats.messages_send for stats in stats]
+    num_send_bytes = [stats.bytes_send for stats in stats]
     
     test_result.reported_execution_time = (mean(reported_execution_times), stdev(reported_execution_times))
     test_result.reported_wait_time = (mean(reported_wait_times), stdev(reported_wait_times))
@@ -61,8 +63,9 @@ def compile_test_result(stats: list[TrackedStatistics], measured_times: list[flo
     test_result.total_execution_time = (mean(measured_times), stdev(measured_times))
     return test_result
 
-def run_protocol_simulated(protocol_class: Type[AbstractProtocol], protocol_input: dict[str, dict[str, Any]], num_repeats=10, init_args=()) -> TestResult:
+def run_protocol_simulated(protocol_class: Type[AbstractProtocol], protocol_input: dict[str, dict[str, Any]], num_repeats=10, init_args=(), print_per_party=False) -> TestResult:
     smpcbox_statistics: list[TrackedStatistics] = []
+    per_party_stats: dict[str, list[TrackedStatistics]] = {}
     measured_times = []
     measured_CPU_times = []
     for _ in range(num_repeats):
@@ -75,8 +78,18 @@ def run_protocol_simulated(protocol_class: Type[AbstractProtocol], protocol_inpu
         e = time.perf_counter()
         measured_times.append(e - s)
         measured_CPU_times.append(e_CPU - s_CPU)
+
         smpcbox_statistics.append(protocol.get_total_statistics())
-    
+
+        for party, stat in protocol.get_party_statistics().items():
+            if party not in per_party_stats.keys():
+                per_party_stats[party] = []
+            per_party_stats[party].append(stat)
+
+    if print_per_party:
+        for party, stats in per_party_stats.items():
+            print(party)
+            print(compile_test_result(stats, [0,0], [0,0]))
     
     return compile_test_result(smpcbox_statistics, measured_times, measured_CPU_times)
 
@@ -235,11 +248,11 @@ def run_distributed_sum_test(min_parties, max_parties):
     
     pd.DataFrame(results).to_csv("distributedSumTest.csv")
 
-run_distributed_sum_test(2, 50)
-print("RUN SIMULATED TEST")
+# run_distributed_sum_test(2, 50)
+# print("RUN SIMULATED TEST")
 # run_simulated_sum_test(2, 500)
 # print(run_protocol_distributed(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}))
 
-# print(run_protocol_simulated(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}))
-# print(run_protocol_simulated(SecretShareMultiplication, {"Alice": {"a": 4}, "Bob": {"b": 3}}))
+# print(run_protocol_simulated(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}, print_per_party=True))
+print(run_protocol_simulated(SecretShareMultiplication, {"Alice": {"a": 4}, "Bob": {"b": 3}}, num_repeats=50,  print_per_party=True))
 
