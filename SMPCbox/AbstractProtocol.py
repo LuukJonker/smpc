@@ -11,6 +11,7 @@ from SMPCbox.ProtocolOpps import (
 
 from SMPCbox.ProtocolCompiler import CompiledProtocol
 
+
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if isinstance(var, str) else list(var)
     return list_var
@@ -44,7 +45,7 @@ class AbstractProtocolVisualiser:
         self,
         sending_party_name: str,
         receiving_party_name: str,
-        variables: list[str],
+        variables: dict[str, Any],
     ):
         """
         This method should implement the visualisation of message sending.
@@ -104,9 +105,6 @@ class AbstractProtocol(ABC):
         self.protocol_steps: list[ProtocolStep] = []
         self.protocol_output: dict[str, dict[str, Any]] = {}
         self.visualiser: AbstractProtocolVisualiser = AbstractProtocolVisualiser()
-
-        self.compiling = False
-        self.compiled_protocol: CompiledProtocol
 
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
@@ -221,15 +219,6 @@ class AbstractProtocol(ABC):
 
         computed_vars = convert_to_list(computed_vars)
 
-        if self.compiling:
-            party_name = self.get_name_of_party(computing_party)
-            input_vars = convert_to_list(input_vars)
-            self.compiled_protocol.add_computation(
-                party_name, computed_vars, input_vars, computation, description
-            )
-            return
-
-
         # Verify the existence of a current protocol step
         self.in_protocol_step()
 
@@ -251,6 +240,13 @@ class AbstractProtocol(ABC):
         for name in input_vars:
             input_var_values[name] = computing_party.get_variable(name)
 
+        self.visualiser.add_computation(
+            self.get_name_of_party(computing_party),
+            computed_var_values,
+            description,
+            input_var_values,
+        )
+
     def add_protocol_step(self, step_name: str = ""):
         """
         Declares the start of a new round/step of the protocol.
@@ -261,8 +257,8 @@ class AbstractProtocol(ABC):
 
         self.protocol_steps.append(ProtocolStep(step_name))
 
-        if step_name != "" and self.compiling:
-            self.compiled_protocol.add_comment(step_name)
+        if step_name != "":
+            self.visualiser.add_step(step_name)
 
     def send_variables(
         self,
@@ -285,15 +281,6 @@ class AbstractProtocol(ABC):
         # in the case that the variables is just a single string convert it to a list
         variables = convert_to_list(variables)
 
-        if not self.broadcasting and self.compiling:
-            sending_party_name = self.get_name_of_party(sending_party)
-            receiving_party_name = self.get_name_of_party(receiving_party)
-
-            self.compiled_protocol.add_send_receive(
-                sending_party_name, receiving_party_name, variables
-            )
-
-
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
@@ -309,20 +296,13 @@ class AbstractProtocol(ABC):
                     # The variable is posibly not received yet.
                     variable_values[var] = None
 
-    def compile(self):
-        """
-        This method is used to compile the protocol into a list of ProtocolOpperations.
-        This is used to visualise the protocol in a GUI.
-        """
-        self.compiled_protocol = CompiledProtocol(self.get_party_roles())
+        if not self.broadcasting:
+            sending_party_name = self.get_name_of_party(sending_party)
+            receiving_party_name = self.get_name_of_party(receiving_party)
 
-        # TODO add the input
-
-        self.compiling = True
-        self()
-        self.compiling = False
-
-        return self.compiled_protocol
+            self.visualiser.send_message(
+                sending_party_name, receiving_party_name, variable_values
+            )
 
     @abstractmethod
     def __call__(self):
@@ -350,8 +330,6 @@ class AbstractProtocol(ABC):
         WARNING: This method uses the ProtocolParty classes to store the provided input. Calling set_protocol_parties
         after a call to this method thus erases the input.
         """
-        if self.compiling:
-            return
 
         expected_vars = self.get_expected_input()
         for role in inputs.keys():
@@ -406,19 +384,7 @@ class AbstractProtocol(ABC):
 
         variables = convert_to_list(variables)
 
-        if self.compiling:
-            broadcasting_party_name = self.get_name_of_party(broadcasting_party)
-            self.compiled_protocol.add_broadcast(broadcasting_party_name, variables)
-            return
-
         var_values = {var: broadcasting_party.get_variable(var) for var in variables}
-
-        self.visualiser.broadcast_variable(
-            self.get_name_of_party(broadcasting_party), var_values
-        )
-
-        if self.compiling:
-            return
 
         self.broadcasting = True
 
@@ -432,6 +398,10 @@ class AbstractProtocol(ABC):
             self.send_variables(broadcasting_party, receiver, variables)
 
         self.broadcasting = False
+
+        self.visualiser.broadcast_variable(
+            self.get_name_of_party(broadcasting_party), var_values
+        )
 
     def run_subroutine_protocol(
         self,
@@ -454,14 +424,16 @@ class AbstractProtocol(ABC):
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
 
-        if self.compiling:
-            self.compiled_protocol.add_subroutine(
-                protocol_class, role_assignments, inputs, output_vars
-            )
-            return
 
         protocol = protocol_class()
         protocol.set_protocol_parties(role_assignments)
+
+        self.visualiser.start_subroutine(
+            protocol.protocol_name,
+            {role: party.name for role, party in role_assignments.items()},
+            inputs,
+            output_vars,
+        )
 
         # before calling start_subroutine_protocol on the parties
         # we first gather the provided variables from the parties to avoid namespace issues.

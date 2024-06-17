@@ -16,6 +16,7 @@ from PyQt5.QtCore import Qt, QPoint, QSize, QEvent
 from PyQt5 import QtCore
 from PyQt5.QtGui import QPainter, QPen, QColor, QCursor
 import math
+from pyqt_toast import Toast
 
 
 class Section(QWidget):
@@ -101,11 +102,13 @@ class Input(QWidget):
 
         layout = QHBoxLayout()
 
+        self.prompt = prompt
+
         self.frame = QFrame()
-        self.prompt = QLabel(f"{prompt}: ")
+        self.prompt_label = QLabel(f"{prompt}: ")
         self.input = QLineEdit()
 
-        layout.addWidget(self.prompt)
+        layout.addWidget(self.prompt_label)
         layout.addWidget(self.input)
         self.frame.setLayout(layout)
 
@@ -146,6 +149,9 @@ class CalculationWidget(QWidget):
     def update_calculation(self, index: int, calculation: str):
         self.sections[index].label1.setText(calculation)
         self.sections[index].reappear()
+
+    def update_result(self, index: int, result: str):
+        self.sections[index].label2.setText(result)
 
 
 class SendReceiveWidget(QWidget):
@@ -396,7 +402,7 @@ class InputWidget(QWidget):
         self.setLayout(layout)
 
     def get_inputs(self):
-        return [input.get_input() if input else None for input in self.inputs]
+        return {input.prompt if input else None : input.get_input() if input else None for input in self.inputs}
 
     def reset(self):
         for input in self.inputs:
@@ -530,8 +536,20 @@ class MainWindow(QMainWindow):
 
         self.party_indexes = {party: 0 for party in parties}
 
+        self.updated_toast = Toast("Protocols have been updated, reset to show changes.", duration=3, parent=self)
+
     def set_protocol_name(self, protocol_name: str):
         self.setWindowTitle(f"{protocol_name} - SMPC Visualiser")
+
+    def set_running(self):
+        self.one_step_button.setEnabled(False)
+        self.run_button.setText("Pause")
+        self.reset_button.setEnabled(False)
+
+    def set_paused(self):
+        self.one_step_button.setEnabled(True)
+        self.run_button.setText("Run")
+        self.reset_button.setEnabled(True)
 
     def update_party_names(self, parties: list[str]):
         client_layout = QGridLayout()
@@ -562,7 +580,7 @@ class MainWindow(QMainWindow):
 
         return widget
 
-    def add_computation_step(self, party_name: str, calculation: str):
+    def add_computation_step(self, party_name: str, calculation: str, result: str):
         index = self.party_indexes[party_name]
 
         item = self.list_widget.item(index)
@@ -577,6 +595,8 @@ class MainWindow(QMainWindow):
             self.list_widget.setItemWidget(list_item, widget)
         else:
             widget.update_calculation(self.get_party_index(party_name), calculation)
+
+        widget.update_result(self.get_party_index(party_name), result)
 
         self.party_indexes[party_name] += 1
 
