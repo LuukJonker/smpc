@@ -252,7 +252,7 @@ def run_distributed_sum_test(min_parties, max_parties):
 # print("RUN SIMULATED TEST")
 # run_simulated_sum_test(2, 500)
 # print(run_protocol_distributed(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}))
-
-# print(run_protocol_simulated(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}, print_per_party=True))
-print(run_protocol_simulated(SecretShareMultiplication, {"Alice": {"a": 4}, "Bob": {"b": 3}}, num_repeats=50,  print_per_party=True))
-
+# print(run_protocol_simulated(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}, num_repeats=50, print_per_party=True))
+# print(run_protocol_simulated(SecretShareMultiplication, {"Alice": {"a": 4}, "Bob": {"b": 3}}, num_repeats=50,  print_per_party=True))
+# print(run_protocol_distributed(OT, {"Sender": {"m0": 1, "m1": 2}, "Receiver": {"b": 0}}, num_repeats=50))
+# print(run_protocol_distributed(SecretShareMultiplication, {"Alice": {"a": 4}, "Bob": {"b": 3}}, num_repeats=50))
