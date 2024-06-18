@@ -507,6 +507,9 @@ class AbstractProtocol(ABC):
             protocol.protocol_name, role_assignments_names, input_values, output_vars
         )
 
+        # set the visualiser instance of the subroutine
+        protocol.set_protocol_visualiser(self.visualiser)
+
         # run the protocol
         protocol()
 
