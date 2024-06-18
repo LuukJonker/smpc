@@ -50,8 +50,9 @@ class SMPCSocket ():
         self.simulated = True
 
         # a buffer storing all received variables which have not been requested by the parrent class via
-        # the receive variable function
-        self.received_variables: dict[str | SMPCSocket, dict[str, Any]] = {}
+        # the receive variable function.
+        # Behind each var a list is stored, this allows buffering of multiple values
+        self.received_variables: dict[str | SMPCSocket, dict[str, list[Any]]] = {}
         self.smpc_socket_in_use = True
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
@@ -210,7 +211,10 @@ class SMPCSocket ():
         
         # add all the provided variables
         for var, val in zip(variable_names, values):
-            self.received_variables[sender][var] = val
+            if var in self.received_variables[sender]:
+                self.received_variables[sender][var].append(val)
+            else:
+                self.received_variables[sender][var] = [val]
     
     """
     Stores a received_variables in the buffer
@@ -220,8 +224,12 @@ class SMPCSocket ():
         if not (sender in self.received_variables.keys() and variable_name in self.received_variables[sender].keys()):
             return None
         
-        value = self.received_variables[sender][variable_name]
-        del self.received_variables[sender][variable_name]
+        # get the value for the variable that arived first
+        value = self.received_variables[sender][variable_name].pop(0)
+
+        if len(self.received_variables[sender][variable_name]) == 0:
+            del self.received_variables[sender][variable_name]
+            
         return value
     
 
