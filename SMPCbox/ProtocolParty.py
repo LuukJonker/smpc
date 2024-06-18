@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable, Union, TYPE_CHECKING
-from SMPCbox.SMPCSocket import SMPCSocket
-from SMPCbox.exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
+from .SMPCSocket import SMPCSocket
+from .exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
 import time
 from sys import getsizeof
 

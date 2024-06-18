@@ -1,3 +1,6 @@
+import sys
+sys.path.append('../../')
+
 from typing import Any
 from abc import ABC, abstractmethod
 from enum import Enum

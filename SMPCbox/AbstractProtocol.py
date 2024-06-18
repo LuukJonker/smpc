@@ -1,8 +1,8 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, TYPE_CHECKING
-from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
-from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
+from .ProtocolParty import ProtocolParty, TrackedStatistics
+from .exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
 from functools import wraps
 
 if TYPE_CHECKING:

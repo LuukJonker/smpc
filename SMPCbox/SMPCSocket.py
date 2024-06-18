@@ -6,7 +6,7 @@ import json
 import select
 import time
 from enum import Enum
-from SMPCbox.exceptions import UnableToConnect
+from .exceptions import UnableToConnect
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
