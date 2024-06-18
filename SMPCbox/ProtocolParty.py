@@ -73,7 +73,22 @@ class ProtocolParty ():
         self.__namespace_prefixes.append(f"_{subroutine_name}")
     
     def end_subroutine_protocol(self):
-        self.__namespace_prefixes.pop()
+        old_prefix = self.__namespace_prefixes.pop()
+        # we wait on any unreceived variables that were part of the subroutine
+        # Not doing so can lead to weird behaviour since new unreceived variables if the protocol
+        # is run again might think variables have already arived in the SMPCSocket otherwise
+        unreceived_vars = []
+        for var in self.not_yet_received_vars.keys():
+            if var.startswith(old_prefix):
+                unreceived_vars.append(var)
+        
+        for var in unreceived_vars:
+            # retrieve the variable to flush it from the SMPCSocket
+            self.get_variable(var)
+            del self.not_yet_received_vars[var]
+
+                
+
     
     def print_local_variables(self):
         print(self.__local_variables)
