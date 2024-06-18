@@ -1,21 +1,33 @@
 from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, Type
-from SMPCbox.ProtocolParty import ProtocolParty, PartyStats
-from SMPCbox.ProtocolStep import ProtocolStep
-from SMPCbox.ProtocolOpps import (
-    LocalComputation,
-    SendVariables,
-    AnnounceGlobals,
-    ProtocolSubroutine,
-)
-
-from SMPCbox.ProtocolCompiler import CompiledProtocol
-
+from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
+from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
+from functools import wraps
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if isinstance(var, str) else list(var)
     return list_var
 
+def check_var_names(names: list[str]):
+    """Checks wether a name starts with an '_' and returns false if that is the case"""
+    for name in names:
+        if name.startswith('_'):
+            raise InvalidVariableName(name)
+
+def local(name: str):
+    """
+    A decorator which a can be used to execute specific methods only if a certain
+    party is local.
+    """
+    def decorator(method):
+        @wraps(method)
+        def wrapper(self: AbstractProtocol, *args, **kwargs):
+            if self.is_local(name):
+                return method(self, *args, **kwargs)
+            else:
+                return None
+        return wrapper
+    return decorator
 
 class AbstractProtocolVisualiser:
     def __init__(self):
@@ -28,8 +40,7 @@ class AbstractProtocolVisualiser:
         self,
         party_name: str,
         computed_vars: dict[str, Any],
-        computation: str,
-        used_vars: dict[str, Any],
+        computation: str
     ):
         """
         This method visualises a computation.
@@ -37,7 +48,6 @@ class AbstractProtocolVisualiser:
             computing_party_name (str): The name of the party performing the computation.
             computed_vars (dict[str, Any]): A dictionary of all the (new) variables which have been computed and their values.
             computation (str): A string description of the computation.
-            used_vars (dict[str, Any]): A dictionary containing the names and values of all the local variables which were used in the computation.
         """
         pass
 
@@ -102,17 +112,16 @@ class AbstractProtocol(ABC):
 
         self.parties: dict[str, ProtocolParty] = {}
         self.running_party = None
-        self.protocol_steps: list[ProtocolStep] = []
         self.protocol_output: dict[str, dict[str, Any]] = {}
         self.visualiser: AbstractProtocolVisualiser = AbstractProtocolVisualiser()
+
+        self.running_simulated = True
 
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
 
-        # instantiate all the ProtocolParty classes with the default name of the role.
-        # These might be overwritten if the user sets them later.
-        for role in self.get_party_roles():
-            self.parties[role] = ProtocolParty(role)
+        for name in self.get_party_names():
+            self.parties[name] = ProtocolParty(name)
 
     def set_protocol_visualiser(self, visualiser: AbstractProtocolVisualiser):
         """
@@ -122,76 +131,63 @@ class AbstractProtocol(ABC):
         self.visualiser = visualiser
 
     @abstractmethod
-    def get_party_roles(self) -> list[str]:
+    def get_party_names(self) -> list[str]:
         """
-        Returns an ordered list of the roles of each party
+        Returns an ordered list of the names of each party in the protocol
         For example for oblivious transfer the roles could be
         ["sender", "receiver"]
-        The return of this function tels protocol users in which order to pass there
-        ProtocolParty instances to the set_protocol_parties function
         """
         pass
 
-    def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
+    def check_name_exists(self, name: str):
+        if name not in self.get_party_names():
+            raise NonExistentParty(self.protocol_name, name)
+
+    def set_party_addresses(self, addresses: dict[str, str], local_party_name: str, connection_timeout=60):
         """
-        Sets the ProtocolParty classes, the dictionary should contain a mapping from every role specified by get_party_roles to a
-        ProtocolParty instance.
+        This method sets the protocol to run distributedly. This method expects two arguments:
 
-        The use of this method is not mandatory, if the parties are never set then the protocol class automaticaly creates ProtocolParty
-        instances with the names of the roles in the protocol.
+        addresses: a dictionary containing for each party name an address ("ip:port") on which
+                   that party will be listening.
+        local_party_name: the name of the party to run locally on this machine
 
-        Note that in the case that the protocol is run distributedly the party running localy should also be specified with the
-        set_running_party method.
-
-        WARNING: Any data, such as input set with the set_input method, which is already stored in the existing ProtocolParty classes
-        is lost once this method is called.
+        connection_timeout: The timeout used for the connection process to each of the clients.
+                            If set to None, no timeout is used and this method will block untill a connection is established.
+                            (max. waiting time is (num_parties-1) * connection_timeout).
         """
 
-        party_names = set(party.name for party in role_assignments.values())
-        if len(party_names) != len(role_assignments.values()):
-            raise Exception(
-                "Make sure each ProtocolParty partaking in a protocol has a unique name!"
-            )
+        self.running_simulated = False
 
-        if set(role_assignments.keys()) != set(self.get_party_roles()):
-            raise Exception(
-                "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
-            )
-        self.parties = role_assignments
+        # set all the addresses
+        for party_name, addr in addresses.items():
+            self.check_name_exists(party_name)
+            self.parties[party_name].socket.set_address(addr)
 
-    def check_role_exists(self, role: str):
-        if role not in self.get_party_roles():
-            raise Exception(
-                f'The role "{role}" does not exist in the protocol "{self.protocol_name}"'
-            )
+        # spin up the local party
+        self.check_name_exists(local_party_name)
+        self.running_party = local_party_name
 
-    def set_running_party(self, role: str, party: ProtocolParty):
-        """
-        When running distributedly the party running locally should be set using this function.
-        To do this a ProtocolParty instance must be provided and the role that the party should have must be specified.
-        The available roles can be retrieved with the get_party_roles method.
-        """
-        self.check_role_exists(role)
-        self.running_party = party.name
+        # ensure that the other parties are ready
+        listening_socket = self.parties[local_party_name].socket
+        listening_socket.start_listening()
+        other_parties: list[ProtocolParty] = list(self.parties.values())
+        other_parties.remove(self.parties[local_party_name])
+        listening_socket.connect_to_parties(other_parties, connection_timeout)
 
-    def is_local_party(self, party: ProtocolParty) -> bool:
-        """
-        A simple helper method which checks wether the provided party should perform its computations on this machine.
-        This is the case if there is no runnning party set in which case all parties are simulated on this machine.
-        Or if the given party is the running party
-        """
-        return self.running_party == None or self.running_party == party.name
 
-    def in_protocol_step(self):
+    def is_local(self, party: ProtocolParty) -> bool:
         """
-        A helper method that checks wether the last item in self.protocol_steps is an instance
-        of the ProtocolStep class and not a ProtocolSubroutine.
-        This is used to ensure that any ProtocolOpperations being added have a ProtocolStep in which they can be added
+        A method meant to be used by SMPCbox users to ensure save local variable accessing.
+        This method takes in a name of a party and returns wether this party is executed locally.
+        This allows for constructions such as:
+
+        if(self.is_local(self.parties["Alice"]) and self.parties["Alice"]["b"] == 0):
+            # Do stuff if b is 0
+        else:
+            # Do stuff is b is 1
+
         """
-        if len(self.protocol_steps) == 0:
-            raise Exception(
-                "No protocol step defined to add a protocol opperation to.\nTo add a protocol step call the add_protocol_step method!"
-            )
+        return party.is_local()
 
     def get_name_of_party(self, party: ProtocolParty):
         """
@@ -204,7 +200,6 @@ class AbstractProtocol(ABC):
         self,
         computing_party: ProtocolParty,
         computed_vars: Union[str, list[str]],
-        input_vars: Union[str, list[str]],
         computation: Callable,
         description: str,
     ):
@@ -218,47 +213,33 @@ class AbstractProtocol(ABC):
         """
 
         computed_vars = convert_to_list(computed_vars)
+        check_var_names(computed_vars)
 
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
-
-        if not self.is_local_party(computing_party):
+        if not computing_party.is_local():
             # We don't run computations for parties that aren't the running party when a running_party is specified (when running in distributed manner).
             return
 
         computing_party.run_computation(
-            computed_vars, input_vars, computation, description
+            computed_vars, computation, description
         )
 
         # Get the computed values
         computed_var_values = {}
         for name in computed_vars:
             computed_var_values[name] = computing_party.get_variable(name)
-
-        # Get the input values
-        input_var_values = {}
-        for name in input_vars:
-            input_var_values[name] = computing_party.get_variable(name)
-
+        print("add computation", self.visualiser)
+        # add the local computation
         self.visualiser.add_computation(
             self.get_name_of_party(computing_party),
             computed_var_values,
-            description,
-            input_var_values,
+            description
         )
 
-    def add_protocol_step(self, step_name: str = ""):
+    def add_comment(self, comment: str):
         """
-        Declares the start of a new round/step of the protocol.
-        Any calls to run_computation after a call to this method will be ran as part of this step.
+        Adds a comment to the protocol visualisation.
         """
-        if step_name == "":
-            step_name = f"step_{len(self.protocol_steps) + 1}"
-
-        self.protocol_steps.append(ProtocolStep(step_name))
-
-        if step_name != "":
-            self.visualiser.add_step(step_name)
+        self.visualiser.add_step(comment)
 
     def send_variables(
         self,
@@ -275,23 +256,22 @@ class AbstractProtocol(ABC):
         variable is send
         """
 
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
+
 
         # in the case that the variables is just a single string convert it to a list
         variables = convert_to_list(variables)
-
+        check_var_names(variables)
         variable_values = {}
 
         # only call the send and receive methods on the parties if that party is running localy.
-        if self.is_local_party(sending_party):
+        if sending_party.is_local():
             sending_party.send_variables(receiving_party, variables)
             for var in variables:
                 variable_values[var] = sending_party.get_variable(var)
 
-        if self.is_local_party(receiving_party):
+        if receiving_party.is_local():
             receiving_party.receive_variables(sending_party, variables)
-            if not self.is_local_party(sending_party):
+            if not sending_party.is_local():
                 for var in variables:
                     # The variable is posibly not received yet.
                     variable_values[var] = None
@@ -326,28 +306,24 @@ class AbstractProtocol(ABC):
         If the protocol is, [yourself.vars[v] for v in self.vars] not run distributed then the inputs for all the parties should be provided.
 
         This method also checks wether the provided input is correct according to the get_expected_input method
-
-        WARNING: This method uses the ProtocolParty classes to store the provided input. Calling set_protocol_parties
-        after a call to this method thus erases the input.
         """
 
         expected_vars = self.get_expected_input()
-        for role in inputs.keys():
-            self.check_role_exists(role)
+        for party in inputs.keys():
+            self.check_name_exists(party)
 
             # check wether the inputs are provided correctly for each role
-            if set(expected_vars[role]) != set(inputs[role].keys()):
-                expected_set = set(expected_vars[role])
-                given_set = set(inputs[role].keys())
-                raise Exception(
-                    f"""The inputs for the role \"{role}\" in the protocol \"{self.protocol_name}\" are incorrect.\n
-                                    Missing variables {expected_set.difference(given_set)}\n
-                                    Provided non existent input variables {given_set.difference(expected_set)}"""
-                )
+            if set(expected_vars[party]) != set(inputs[party].keys()):
+                expected_set = set(expected_vars[party])
+                given_set = set(inputs[party].keys())
+                missing_vars = expected_set.difference(given_set)
+                non_existend_vars = given_set.difference(expected_set)
+                raise InvalidProtocolInput(party, list(missing_vars), list(non_existend_vars))
 
             # Set the inputs
-            for var in inputs[role].keys():
-                self.parties[role].set_local_variable(var, inputs[role][var])
+            for var in inputs[party].keys():
+                check_var_names([var])
+                self.parties[party].set_local_variable(var, inputs[party][var])
 
     @abstractmethod
     def output_variables(self) -> dict[str, list[str]]:
@@ -364,13 +340,14 @@ class AbstractProtocol(ABC):
         Using the defined output variables from the output_variables method this method returns all the values of the output variables
         """
         output = {}
-        for role in self.output_variables().keys():
-            self.check_role_exists(role)
-            if not self.is_local_party(self.parties[role]):
+        for party in self.output_variables().keys():
+            self.check_name_exists(party)
+            if not self.parties[party].is_local():
                 continue
-            output[role] = {}
-            for var in self.output_variables()[role]:
-                output[role][var] = self.parties[role].get_variable(var)
+            output[party] = {}
+            for var in self.output_variables()[party]:
+                check_var_names([var])
+                output[party][var] = self.parties[party].get_variable(var)
 
         return output
 
@@ -383,13 +360,7 @@ class AbstractProtocol(ABC):
         """
 
         variables = convert_to_list(variables)
-
-        var_values = {var: broadcasting_party.get_variable(var) for var in variables}
-
-        self.broadcasting = True
-
-        # Verify the existence of a current protocol step
-        self.in_protocol_step()
+        check_var_names(variables)
 
         for receiver in self.parties.values():
             if receiver == broadcasting_party:
@@ -398,6 +369,10 @@ class AbstractProtocol(ABC):
             self.send_variables(broadcasting_party, receiver, variables)
 
         self.broadcasting = False
+
+        var_values: dict[str, Any] = {}
+        for var in variables:
+            var_values[var] = broadcasting_party.get_variable(var)
 
         self.visualiser.broadcast_variable(
             self.get_name_of_party(broadcasting_party), var_values
@@ -440,28 +415,28 @@ class AbstractProtocol(ABC):
         input_values = {}
         # used for visualisation
         input_var_mapping = {}
-        for role in inputs.keys():
-            protocol.check_role_exists(role)
-            party = role_assignments[role]
+        for party_name in inputs.keys():
+            protocol.check_name_exists(party_name)
+            party = role_assignments[party_name]
 
-            if not self.is_local_party(party):
+            if not party.is_local():
                 # No need to set the input of non local parties
                 continue
 
             # get the values for each of the input variables.
-            input_values[role] = {}
-            input_var_mapping[role] = {}
+            input_values[party_name] = {}
+            input_var_mapping[party_name] = {}
 
             # we assume the user provided correct input. If not the set
-            for input_var_name, provided_var in inputs[role].items():
+            for input_var_name, provided_var in inputs[party_name].items():
                 # Set the input variable
-                if self.is_local_party(party):
-                    input_values[role][input_var_name] = role_assignments[
-                        role
+                if party.is_local():
+                    input_values[party_name][input_var_name] = role_assignments[
+                        party_name
                     ].get_variable(provided_var)
-                    input_var_mapping[role][input_var_name] = provided_var
+                    input_var_mapping[party_name][input_var_name] = provided_var
 
-            party = role_assignments[role]
+            party = role_assignments[party_name]
 
         # comunicate to the participating parties that they are entering a subroutine
         for party in role_assignments.values():
@@ -473,9 +448,18 @@ class AbstractProtocol(ABC):
         # Comunicate to the protocol wether a certain party is running the protocol locally
         if self.running_party != None:
             # find what role the running_party has and set them as the running party in the subroutine protocol
+            local_party_role = None
+
             for role, party in role_assignments.items():
-                if self.running_party == party.name:
-                    protocol.set_running_party(role, party)
+                if self.running_party == self.get_name_of_party(party):
+                    local_party_role = role
+
+            # Tell the protocol that it is running distributed
+            protocol.running_party = local_party_role
+            protocol.running_simulated = False
+            # the addresses do not have to be provided these are in the ProtocolParty instances provided with
+            # set_protocol_parties
+
 
         # run the protocol
         protocol()
@@ -489,8 +473,8 @@ class AbstractProtocol(ABC):
 
         # now assign the output variables (not with the subroutine prefix _name_[var_name])
         for role in subroutine_output.keys():
-            party: ProtocolParty = role_assignments[role]
-            if not self.is_local_party(party):
+            party = role_assignments[role]
+            if not party.is_local():
                 # No need to set the output of non local parties
                 continue
 
@@ -501,23 +485,39 @@ class AbstractProtocol(ABC):
 
         self.visualiser.end_subroutine(subroutine_output)
 
-    def get_statistics(self) -> dict[str, PartyStats]:
+    def get_party_statistics(self) -> dict[str, TrackedStatistics]:
         """
         Returns the statistics of each party in the protocol
         The return is a dictionary with each role mapping to the statistics of that party
         """
         stats = {}
         for role, party in self.parties.items():
-            stats[role] = party.get_stats()
+            stats[role] = party.get_statistics()
 
         return stats
 
-    def get_protocol_steps(self) -> list[ProtocolStep]:
+    def set_protocol_parties(self, role_assignments: dict[str, ProtocolParty]):
         """
-        Retrieves all of the protocol steps containing the opperations performed by the protocol.
-        If the protocol has not yet been called this returns an empty list.
+        This method should NOT be used by users of SMPCbox. Method is used internally
         """
-        return self.protocol_steps
+
+        if set(role_assignments.keys()) != set(self.get_party_names()):
+            raise Exception(
+                "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
+            )
+        self.parties = role_assignments
+
+    def get_total_statistics(self) -> TrackedStatistics:
+        """
+        This method returns the agregated statistics of all the parties.
+        This is the same data as returned from the get_party_statistics method
+        """
+        total_stats = TrackedStatistics()
+        for party in self.parties.values():
+            party_stats: TrackedStatistics = party.get_statistics()
+            total_stats += party_stats
+
+        return total_stats
 
     def terminate_protocol(self):
         """

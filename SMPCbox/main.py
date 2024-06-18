@@ -8,7 +8,7 @@ from SMPCbox.ProtocolParty import ProtocolParty
 from multiprocessing import Process, Queue
 from enum import Enum
 import re
-
+from inspect import signature
 
 TIMER_INTERVAL = 10
 
@@ -63,10 +63,10 @@ class ProtocolSide(AbstractProtocolVisualiser):
         party_name: str,
         computed_vars: dict[str, Any],
         computation: str,
-        used_vars: dict[str, Any],
     ):
+        print("put it on the queue")
         self.queue.put(
-            (Step.COMPUTATION, (party_name, computed_vars, computation, used_vars))
+            (Step.COMPUTATION, (party_name, computed_vars, computation))
         )
 
     def send_message(
@@ -115,6 +115,7 @@ def run_protocol(protocol: AbstractProtocol, queue: Queue):
         protocol (AbstractProtocol): The protocol to run
         queue (Queue): The queue to send the steps to
     """
+    print("RUNNING PROTOCOL")
     protocol.set_protocol_visualiser(ProtocolSide(queue))
     protocol()
 
@@ -149,7 +150,7 @@ class Protocolvisualiser:
         self.protocol_name = self.gui.protocol_chooser.currentText()
 
         self.gui.set_protocol_name(self.protocol.protocol_name)
-        self.party_names = self.protocol.get_party_roles()
+        self.party_names = self.protocol.get_party_names()
         self.parties = {party: ProtocolParty(party) for party in self.party_names}
         self.gui.update_party_names(self.party_names)
         inp = self.protocol.get_expected_input()
@@ -336,6 +337,13 @@ class Protocolvisualiser:
     def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
         self.gui.add_end_subroutine_step(output_values)
 
+    def choose_protocol(self, protocol_class: type['AbstractProtocol']):
+        sig = signature(protocol_class.__init__)
+        params = sig.parameters
+        params = {name: param.annotation for name, param in params.items()}
+        print(params)
+
+
     def set_protocols(self, protocols: dict[str, type[AbstractProtocol]]):
         self.protocols = protocols
         self.gui.protocol_chooser.currentIndexChanged.disconnect()
@@ -355,5 +363,5 @@ class Protocolvisualiser:
         self.reset()
 
     def protocol_changed(self, index: int):
-        self.protocol = list(self.protocols.values())[index]()
+        self.choose_protocol(list(self.protocols.values())[index])
         self.reset()
