@@ -59,5 +59,5 @@ pip install -r requirements.txt
 To run the gui, execute the following command from the root directory of the project:
 
 ```bash
-python3 gui/show.py
+python3 run.py implementedProtocols
 ```

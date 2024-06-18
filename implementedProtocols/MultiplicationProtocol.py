@@ -7,7 +7,7 @@ sys.path.append('../')
 
 import time
 from SMPCbox import AbstractProtocol
-from implementedProtocols import OT
+from OT import OT
 import os
 
 def rand_int():
@@ -48,7 +48,7 @@ class SecretShareMultiplication(AbstractProtocol):
             ot_inputs = {"Sender": {"m0": "r"+str(i), "m1": "m1_input"}, "Receiver": {"b": "b_i"}}
             ot_output = {"Receiver": {"mb": f"m{i}_b{i}"}}
             self.run_subroutine_protocol(OT, {"Sender": self.parties["Alice"], "Receiver": self.parties["Bob"]}, ot_inputs, ot_output)
-        
+
         print(time.time())
 
         self.compute(alice, "x", lambda: (-sum(alice[var] for var in r_vars)) % pow(2, self.l), "minus Sum of all r_i")
@@ -59,7 +59,7 @@ class SecretShareMultiplication(AbstractProtocol):
 
 if __name__ == "__main__":
     p = SecretShareMultiplication(l=32)
-    
+
     p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Alice")
     p.set_input({"Alice": {"a": 21}})
     s = time.time()
