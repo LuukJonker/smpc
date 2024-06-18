@@ -6,7 +6,7 @@ import inspect
 from threading import Thread
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-# from SMPCbox.AbstractProtocol import AbstractProtocol
+from SMPCbox.AbstractProtocol import AbstractProtocol
 from typing import Callable
 from types import ModuleType
 from dataclasses import dataclass
@@ -102,7 +102,7 @@ class ClassWatcher:
 
         :return: List of tuples with class names and class objects.
         """
-        classes: list[tuple[str, object]] = []
+        classes: list[tuple[str, type[AbstractProtocol]]] = []
         for module_name, module in self.module_cache.items():
             for name, obj in inspect.getmembers(module.module, inspect.isclass):
                 if obj.__module__ == module_name:
@@ -115,7 +115,7 @@ class ClassWatcher:
 
         :return: List of tuples with class names and class objects.
         """
-        changed_classes: list[tuple[str, object]] = []
+        changed_classes: list[tuple[str, AbstractProtocol]] = []
         for module_name, module in self.module_cache.items():
             if module.changed:
                 module.changed = False

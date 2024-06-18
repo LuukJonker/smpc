@@ -30,7 +30,7 @@ class TrackedStatistics():
         bytes_send: {self.bytes_send}
         messages_received: {self.messages_received}
         bytes_received: {self.bytes_received}"""
-    
+
     def __add__(self, other_stats: TrackedStatistics) -> TrackedStatistics:
         res = TrackedStatistics()
         res.execution_time = self.execution_time + other_stats.execution_time
@@ -55,23 +55,23 @@ class ProtocolParty ():
         # a stack of prefixes which handle the namespaces of variable
         self.__namespace_prefixes: list[str] = []
 
-        # stores the variables which have been "received" to not have to request them from the 
+        # stores the variables which have been "received" to not have to request them from the
         # SMPCSocket yet and the sender which send the variable
         self.not_yet_received_vars: dict[str, ProtocolParty] = {}
 
     def get_namespace(self) -> str:
         if len(self.__namespace_prefixes) == 0:
             return ""
-        
+
         # start with a '_' to seperate the var name from the namespace
         namespace = "_"
         for prefix in self.__namespace_prefixes:
             namespace = prefix + namespace
         return namespace
-    
+
     def start_subroutine_protocol(self, subroutine_name: str):
         self.__namespace_prefixes.append(f"_{subroutine_name}")
-    
+
     def end_subroutine_protocol(self):
         old_prefix = self.__namespace_prefixes.pop()
         # we wait on any unreceived variables that were part of the subroutine
@@ -92,14 +92,14 @@ class ProtocolParty ():
     def __getitem__(self, key):
         # Allows to use [] to retrieve variables of a party.
         return self.get_variable(key)
-    
+
     def is_local(self):
         return self.socket.simulated or self.socket.listening_socket is not None
 
     def get_variable(self, variable_name: str):
         if not self.is_local():
             raise InvalidLocalVariableAccess(self.name, variable_name)
-            
+
         # handle the namespace
         variable_name = self.get_namespace() + variable_name
 
@@ -115,7 +115,7 @@ class ProtocolParty ():
 
             # add the received values bytes to the received bytes stat
             self.statistics.bytes_received += getsizeof(value)
-            
+
             self.statistics.wait_time += e_wait_time - s_wait_time
 
             self.__local_variables[variable_name] = value
@@ -124,7 +124,7 @@ class ProtocolParty ():
 
         if variable_name not in self.__local_variables.keys():
             raise NonExistentVariable(self.name, variable_name)
-        
+
         return self.__local_variables[variable_name]
 
     def run_computation(self, computed_vars: Union[str, list[str]], computation: Callable, description: str):
@@ -147,14 +147,16 @@ class ProtocolParty ():
         if len(computed_vars) == 1:
             self.__local_variables[computed_vars[0]] = res
             return
-        
-        # check if enough values are returned 
+
+        # check if enough values are returned
         if len(res) != len(computed_vars):
             IncorrectComputationResultDimension(description, res, len(computed_vars))
-        
+
         # assign the values
         for i, var in enumerate(computed_vars):
             self.__local_variables[var] = res[i]
+
+        return res
 
     def set_local_variable(self, variable_name: str, value: Any):
         self.__local_variables[self.get_namespace() + variable_name] = value
@@ -175,9 +177,9 @@ class ProtocolParty ():
         # add the variables to the not_yet_received_vars
         for name in variable_names:
             self.not_yet_received_vars[name] = sender
-        
+
         self.statistics.messages_received += 1
-    
+
     def get_statistics(self) -> TrackedStatistics:
         """
         Retreives the statistics of a single ProtocolParty
