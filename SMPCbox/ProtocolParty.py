@@ -85,10 +85,6 @@ class ProtocolParty ():
         for var in unreceived_vars:
             # retrieve the variable to flush it from the SMPCSocket
             self.get_variable(var)
-            del self.not_yet_received_vars[var]
-
-                
-
     
     def print_local_variables(self):
         print(self.__local_variables)
