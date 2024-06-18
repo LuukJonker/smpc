@@ -75,7 +75,7 @@ class TestOT(unittest.TestCase):
 
     
     def test_cases_distributed(self):
-        start_port = 11000
+        start_port = 12000
         for input in self.cases():
             out = test_distributed(OT, input, start_port, extra_return_vars={"Sender": ["N"]})
             self.check_output(input, out)

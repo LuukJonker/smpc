@@ -233,7 +233,6 @@ class AbstractProtocol(ABC):
         computed_var_values = {}
         for name in computed_vars:
             computed_var_values[name] = computing_party.get_variable(name)
-        print("add computation", self.visualiser)
         # add the local computation
         self.visualiser.add_computation(
             self.get_name_of_party(computing_party),

@@ -73,7 +73,7 @@ class TestMult(unittest.TestCase):
     
     def test_cases_distributed(self):
         i = 0
-        start_port = 11000
+        start_port = 10000
         for input in self.cases():
             l = input["Setting"]["l"]
             del input["Setting"]

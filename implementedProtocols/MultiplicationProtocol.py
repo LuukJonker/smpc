@@ -7,7 +7,7 @@ sys.path.append('../')
 
 import time
 from SMPCbox import AbstractProtocol
-from OT import OT
+from implementedProtocols.OT import OT
 import os
 
 def rand_int():
