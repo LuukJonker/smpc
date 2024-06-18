@@ -47,8 +47,10 @@ class Section(QWidget):
 
         self.frame = QFrame()
         self.label1 = QLabel(text)
+        self.label1.setWordWrap(True)
         self.label1.setAlignment(Qt.AlignCenter)  # type: ignore
         self.label2 = QLabel("")
+        self.label2.setWordWrap(True)
         self.label2.setAlignment(Qt.AlignCenter)  # type: ignore
         layout.addWidget(self.label1)
 
@@ -74,6 +76,7 @@ class Section(QWidget):
     def add_computation(self, text):
         self.extra_text = text
         self.label2.setText(text)
+
 
     def disappear(self):
         self.setStyleSheet("")
@@ -402,7 +405,11 @@ class InputWidget(QWidget):
         self.setLayout(layout)
 
     def get_inputs(self):
-        return {input.prompt if input else None : input.get_input() if input else None for input in self.inputs}
+        result = {}
+        for input in self.inputs:
+            if input.prompt != "":
+                result[input.prompt] = input.get_input()
+        return result
 
     def reset(self):
         for input in self.inputs:
@@ -494,7 +501,7 @@ class NoHighlightListWidget(QListWidget):
 
 class MainWindow(QMainWindow):
     def __init__(
-        self, parties: list[str], one_step_callback, run_callback, reset_callback
+        self, parties: list[str], one_step_callback, run_callback, reset_callback, on_close
     ):
         super().__init__()
         self.setWindowTitle("SMPC Visualiser")
@@ -511,14 +518,19 @@ class MainWindow(QMainWindow):
 
         self.list_widget = NoHighlightListWidget()
 
+        self.status_label = QLabel("Status: Not started")
+
         self.one_step_button = StyledButton("One step", color_scheme="green")
         self.run_button = StyledButton("Run", color_scheme="blue")
         self.reset_button = StyledButton("Reset", color_scheme="red")
+
+        self.on_close = on_close
 
         layout = QVBoxLayout()
         layout.addWidget(self.protocol_chooser)
         layout.addWidget(self.client_frame)
         layout.addWidget(self.list_widget)
+        layout.addWidget(self.status_label)
         layout.addWidget(self.one_step_button)
         layout.addWidget(self.run_button)
         layout.addWidget(self.reset_button)
@@ -536,18 +548,39 @@ class MainWindow(QMainWindow):
 
         self.party_indexes = {party: 0 for party in parties}
 
-        self.updated_toast = Toast("Protocols have been updated, reset to show changes.", duration=3, parent=self)
+    def closeEvent(self, a0):
+        super().closeEvent(a0)
+        self.on_close()
 
     def set_protocol_name(self, protocol_name: str):
         self.setWindowTitle(f"{protocol_name} - SMPC Visualiser")
 
+    def set_status(self, status: str):
+        self.status_label.setText(f"Status: {status}")
+
     def set_running(self):
         self.one_step_button.setEnabled(False)
         self.run_button.setText("Pause")
+        self.run_button.setEnabled(True)
         self.reset_button.setEnabled(False)
 
     def set_paused(self):
         self.one_step_button.setEnabled(True)
+        self.run_button.setText("Run")
+        self.run_button.setEnabled(True)
+        self.reset_button.setEnabled(True)
+
+    def start_one_step(self):
+        self.one_step_button.setEnabled(False)
+        self.run_button.setEnabled(True)
+
+    def end_one_step(self):
+        self.one_step_button.setEnabled(True)
+        self.run_button.setEnabled(True)
+
+    def set_finished(self):
+        self.one_step_button.setEnabled(False)
+        self.run_button.setEnabled(False)
         self.run_button.setText("Run")
         self.reset_button.setEnabled(True)
 
