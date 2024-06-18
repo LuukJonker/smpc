@@ -22,7 +22,7 @@ def local(name: str):
     def decorator(method):
         @wraps(method)
         def wrapper(self: AbstractProtocol, *args, **kwargs):
-            if self.is_local(name):
+            if self.is_local(self.parties[name]):
                 return method(self, *args, **kwargs)
             else:
                 return None 
@@ -501,6 +501,9 @@ class AbstractProtocol(ABC):
         self.visualiser.start_subroutine(
             protocol.protocol_name, role_assignments_names, input_values, output_vars
         )
+
+        # set the visualiser instance of the subroutine
+        protocol.set_protocol_visualiser(self.visualiser)
 
         # run the protocol
         protocol()
