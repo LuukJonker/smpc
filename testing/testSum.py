@@ -72,13 +72,13 @@ class TestSum(unittest.TestCase):
 
     
     def test_cases_distributed(self):
-        start_port = 10000
+        start_port = 11000
         for case in self.cases():
             input = self.create_case(case)
             num_parties = len(case)
             out = test_distributed(Sum, input, start_port, init_args=[num_parties])
             self.check_output(case, out)
-            start_port += 2
+            start_port += len(case)
         print("Finished all 50 distributed tests")
     
     def test_cases_simulated(self):
@@ -86,7 +86,7 @@ class TestSum(unittest.TestCase):
             input = self.create_case(case)
             num_parties = len(case)
             out = test_simulated(Sum, input, init_args=[num_parties])
-            self.check_output(input, out)
+            self.check_output(case, out)
         print("Finished all 50 simulated tests")
 
 if __name__ == "__main__":
