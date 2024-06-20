@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, Callable, Union, TYPE_CHECKING
-from .SMPCSocket import SMPCSocket
+from .SMPCSocket import SMPCSocket, NotReceived
 from .exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
 import time
 from sys import getsizeof
@@ -110,7 +110,7 @@ class ProtocolParty ():
             s_wait_time = time.perf_counter()
             value = self.socket.receive_variable(sender, variable_name)
             e_wait_time = time.perf_counter()
-            if value == None:
+            if isinstance(value, NotReceived):
                 raise VariableNotReceived(sender.name, variable_name)
 
             # add the received values bytes to the received bytes stat

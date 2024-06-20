@@ -58,7 +58,7 @@ class SecretShareMultiplication(AbstractProtocol):
 if __name__ == "__main__":
     p = SecretShareMultiplication(l=32)
 
-    p.set_party_addresses({"Bob": "127.0.0.1:4859", "Alice": "127.0.0.1:4869"}, "Alice")
+    p.set_party_addresses({"Bob": "127.0.0.1:4852", "Alice": "127.0.0.1:4862"}, "Alice")
     p.set_input({"Alice": {"a": 21}})
     s = time.time()
     p()

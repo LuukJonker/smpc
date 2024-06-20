@@ -11,6 +11,9 @@ from .exceptions import UnableToConnect
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
 
+class NotReceived:
+    pass
+
 """
 Parses an adress such as:
 "127.0.0.1:3291"
@@ -222,7 +225,7 @@ class SMPCSocket ():
     def get_variable_from_buffer(self, sender: str | SMPCSocket, variable_name: str) -> Any:
         # check if this variable has been received from the specified sender
         if not (sender in self.received_variables.keys() and variable_name in self.received_variables[sender].keys()):
-            return None
+            return NotReceived()
         
         # get the value for the variable that arived first
         value = self.received_variables[sender][variable_name].pop(0)
@@ -248,7 +251,7 @@ class SMPCSocket ():
             start_time = time.time()
             while (time.time() - start_time < timeout):
                 value = self.get_variable_from_buffer(sender_addr, variable_name)
-                if value != None:
+                if not isinstance(value, NotReceived):
                     return value
                 
                 if self.ip == None:
@@ -256,7 +259,7 @@ class SMPCSocket ():
                     break
                 time.sleep(0.1)
             
-            return None
+            return NotReceived()
 
     """
     This function sends the variable to this socket. 
