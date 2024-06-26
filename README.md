@@ -61,3 +61,13 @@ To run the gui, execute the following command from the root directory of the pro
 ```bash
 python3 run.py implementedProtocols
 ```
+
+### Upload SMPCbox package
+To upload a new version to PyPI do the following:
+First increment the version number in setup.py
+Then run:
+```bash
+./uploadPyPI.bash
+```
+This will then prompt you to enter an API token for PyPI
+
