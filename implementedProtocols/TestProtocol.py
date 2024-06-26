@@ -17,16 +17,16 @@ class Sum(AbstractProtocol):
 
     def party_names(self) -> list[str]:
         return [f"party_{i}" for i in range(self.num_parties)]
-
+    
     def input_variables(self) -> dict[str, list[str]]:
         input_vars = {}
         for name in self.party_names():
             input_vars[name] = ["value"]
         return input_vars
-
+    
     def output_variables(self) -> dict[str, list[str]]:
         return {"party_0":["sum"]}
-
+    
     def __call__(self):
         party_0 = self.parties["party_0"]
         self.compute(party_0, "r", rand, "rand()")
@@ -39,8 +39,8 @@ class Sum(AbstractProtocol):
             prev_party = self.parties[self.party_names()[i-1]]
             cur_party = self.parties[name]
             self.send_variables(prev_party, cur_party, "accum")
-            self.compute(cur_party, "accum", lambda cur_party = cur_party: cur_party["accum"] + cur_party["value"], "accum + value")
-
+            self.compute(cur_party, "accum", lambda: cur_party["accum"] + cur_party["value"], "accum + value")
+        
         # the last party now has the total accumulation
         self.send_variables(self.parties[self.party_names()[-1]], self.parties["party_0"], "accum")
         self.compute(party_0, "sum", lambda: party_0["accum"] - party_0["r"], "accum - r")

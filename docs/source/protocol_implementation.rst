@@ -18,10 +18,10 @@ Below an example is shown of how this can be done and what methods need to be im
         def __init__(self):
             super().__init__()
         
-        def get_party_names(self) -> list[str]:
+        def party_names(self) -> list[str]:
             return ["Party1", "Party2"]
 
-        def get_expected_input(self) -> dict[str, list[str]]:
+        def input_variables(self) -> dict[str, list[str]]:
             return {"Party1":["input_variable_1","input_variable_2"],"Party2":["input_variable"]}
         
         def output_variables(self) -> dict[str, list[str]]:

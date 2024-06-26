@@ -6,10 +6,13 @@ import json
 import select
 import time
 from enum import Enum
-from SMPCbox.exceptions import UnableToConnect
+from .exceptions import UnableToConnect
 
 if TYPE_CHECKING:
     from ProtocolParty import ProtocolParty
+
+class NotReceived:
+    pass
 
 """
 Parses an adress such as:
@@ -50,8 +53,9 @@ class SMPCSocket ():
         self.simulated = True
 
         # a buffer storing all received variables which have not been requested by the parrent class via
-        # the receive variable function
-        self.received_variables: dict[str | SMPCSocket, dict[str, Any]] = {}
+        # the receive variable function.
+        # Behind each var a list is stored, this allows buffering of multiple values
+        self.received_variables: dict[str | SMPCSocket, dict[str, list[Any]]] = {}
         self.smpc_socket_in_use = True
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
@@ -210,7 +214,10 @@ class SMPCSocket ():
         
         # add all the provided variables
         for var, val in zip(variable_names, values):
-            self.received_variables[sender][var] = val
+            if var in self.received_variables[sender]:
+                self.received_variables[sender][var].append(val)
+            else:
+                self.received_variables[sender][var] = [val]
     
     """
     Stores a received_variables in the buffer
@@ -218,10 +225,14 @@ class SMPCSocket ():
     def get_variable_from_buffer(self, sender: str | SMPCSocket, variable_name: str) -> Any:
         # check if this variable has been received from the specified sender
         if not (sender in self.received_variables.keys() and variable_name in self.received_variables[sender].keys()):
-            return None
+            return NotReceived()
         
-        value = self.received_variables[sender][variable_name]
-        del self.received_variables[sender][variable_name]
+        # get the value for the variable that arived first
+        value = self.received_variables[sender][variable_name].pop(0)
+
+        if len(self.received_variables[sender][variable_name]) == 0:
+            del self.received_variables[sender][variable_name]
+            
         return value
     
 
@@ -240,7 +251,7 @@ class SMPCSocket ():
             start_time = time.time()
             while (time.time() - start_time < timeout):
                 value = self.get_variable_from_buffer(sender_addr, variable_name)
-                if value != None:
+                if not isinstance(value, NotReceived):
                     return value
                 
                 if self.ip == None:
@@ -248,7 +259,7 @@ class SMPCSocket ():
                     break
                 time.sleep(0.1)
             
-            return None
+            return NotReceived()
 
     """
     This function sends the variable to this socket. 

@@ -1,9 +1,15 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Union, Callable, Any, Type
+from typing import Union, Callable, Any, TYPE_CHECKING
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
 from SMPCbox.api import ProtocolSide
 from functools import wraps
+
+if TYPE_CHECKING:
+    from AbstractProtocol import AbstractProtocol
+
+
 
 def convert_to_list(var: Union[str, list[str]]):
     list_var: list[str] = [var] if isinstance(var, str) else list(var)
@@ -23,7 +29,7 @@ def local(name: str):
     def decorator(method):
         @wraps(method)
         def wrapper(self: AbstractProtocol, *args, **kwargs):
-            if self.is_local(name):
+            if self.is_local(self.parties[name]):
                 return method(self, *args, **kwargs)
             else:
                 return None
@@ -47,7 +53,7 @@ class AbstractProtocol(ABC):
         # A flag used to disable the visualisation for message sending if the message sending is part of a broadcast opperation
         self.broadcasting = False
 
-        for name in self.get_party_names():
+        for name in self.party_names():
             self.parties[name] = ProtocolParty(name)
 
         self.__terminated_protocol = False
@@ -60,7 +66,7 @@ class AbstractProtocol(ABC):
         self.visualiser = visualiser
 
     @abstractmethod
-    def get_party_names(self) -> list[str]:
+    def party_names(self) -> list[str]:
         """
         Returns an ordered list of the names of each party in the protocol
         For example for oblivious transfer the roles could be
@@ -69,7 +75,7 @@ class AbstractProtocol(ABC):
         pass
 
     def check_name_exists(self, name: str):
-        if name not in self.get_party_names():
+        if name not in self.party_names():
             raise NonExistentParty(self.protocol_name, name)
 
     def set_party_addresses(self, addresses: dict[str, str], local_party_name: str, connection_timeout=60):
@@ -160,7 +166,6 @@ class AbstractProtocol(ABC):
         computed_var_values = {}
         for name in computed_vars:
             computed_var_values[name] = computing_party.get_variable(name)
-
         # add the local computation
         if self.visualiser:
             self.visualiser.add_computation(
@@ -233,7 +238,7 @@ class AbstractProtocol(ABC):
         pass
 
     @abstractmethod
-    def get_expected_input(self) -> dict[str, list[str]]:
+    def input_variables(self) -> dict[str, list[str]]:
         """
         A protocol must specify what the expected inputs for each party should be.
         Note that the keys of the dictionary are roles as specified by the get_party_roles method
@@ -242,14 +247,13 @@ class AbstractProtocol(ABC):
 
     def set_input(self, inputs: dict[str, dict[str, Any]]):
         """
-        Sets the inputs for the protocols (all inputs specified by get_expected_input) should be given
+        Sets the inputs for the protocols (all inputs specified by input_variables) should be given
         If set_running_party has been called only the input for that party needs to be given
         If the protocol is, [yourself.vars[v] for v in self.vars] not run distributed then the inputs for all the parties should be provided.
 
-        This method also checks wether the provided input is correct according to the get_expected_input method
+        This method also checks wether the provided input is correct according to the input_variables method
         """
-
-        expected_vars = self.get_expected_input()
+        expected_vars = self.input_variables()
         for party in inputs.keys():
             self.check_name_exists(party)
 
@@ -322,7 +326,7 @@ class AbstractProtocol(ABC):
 
     def run_subroutine_protocol(
         self,
-        protocol_class: Type["AbstractProtocol"],
+        protocol: AbstractProtocol,
         role_assignments: dict[str, ProtocolParty],
         inputs: dict[str, dict[str, str]],
         output_vars: dict[str, dict[str, str]],
@@ -341,8 +345,6 @@ class AbstractProtocol(ABC):
         Note that the keys in the inputs and role_assignments dictionaries should be roles specified in the get_party_roles method of the provided protocol
         """
 
-
-        protocol = protocol_class()
         protocol.set_protocol_parties(role_assignments)
 
         if self.visualiser:
@@ -406,6 +408,11 @@ class AbstractProtocol(ABC):
         if self.visualiser:
             protocol.set_protocol_visualiser(self.visualiser)
 
+        # tell the visualiser we will be running a subroutine.
+        role_assignments_names = {}
+        for role, party in role_assignments.items():
+            role_assignments_names[role] = self.get_name_of_party(party)
+
         # run the protocol
         protocol()
 
@@ -447,7 +454,7 @@ class AbstractProtocol(ABC):
         This method should NOT be used by users of SMPCbox. Method is used internally
         """
 
-        if set(role_assignments.keys()) != set(self.get_party_names()):
+        if set(role_assignments.keys()) != set(self.party_names()):
             raise Exception(
                 "A ProtocolParty instance should be provided for every role in the protocol when calling set_protocol_parties."
             )

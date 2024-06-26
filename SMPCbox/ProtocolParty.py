@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable, Union, TYPE_CHECKING
-from SMPCbox.SMPCSocket import SMPCSocket
-from SMPCbox.exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
+from .SMPCSocket import SMPCSocket, NotReceived
+from .exceptions import NonExistentVariable, IncorrectComputationResultDimension, VariableNotReceived, InvalidLocalVariableAccess
 import time
 from sys import getsizeof
 
@@ -73,8 +73,19 @@ class ProtocolParty ():
         self.__namespace_prefixes.append(f"_{subroutine_name}")
 
     def end_subroutine_protocol(self):
-        self.__namespace_prefixes.pop()
-
+        old_prefix = self.__namespace_prefixes.pop()
+        # we wait on any unreceived variables that were part of the subroutine
+        # Not doing so can lead to weird behaviour since new unreceived variables if the protocol
+        # is run again might think variables have already arived in the SMPCSocket otherwise
+        unreceived_vars = []
+        for var in self.not_yet_received_vars.keys():
+            if var.startswith(old_prefix):
+                unreceived_vars.append(var)
+        
+        for var in unreceived_vars:
+            # retrieve the variable to flush it from the SMPCSocket
+            self.get_variable(var)
+    
     def print_local_variables(self):
         print(self.__local_variables)
 
@@ -99,7 +110,7 @@ class ProtocolParty ():
             s_wait_time = time.perf_counter()
             value = self.socket.receive_variable(sender, variable_name)
             e_wait_time = time.perf_counter()
-            if value == None:
+            if isinstance(value, NotReceived):
                 raise VariableNotReceived(sender.name, variable_name)
 
             # add the received values bytes to the received bytes stat

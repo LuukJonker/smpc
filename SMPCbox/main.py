@@ -153,10 +153,10 @@ class Protocolvisualiser(ProtocolSide):
         if self.protocol is None:
             return
 
-        self.party_names = self.protocol.get_party_names()
+        self.party_names = self.protocol.party_names()
         self.parties = {party: ProtocolParty(party) for party in self.party_names}
         self.gui.update_party_names(self.party_names)
-        inp = self.protocol.get_expected_input()
+        inp = self.protocol.input_variables()
 
         self.inputs = []
 
@@ -476,7 +476,6 @@ class Protocolvisualiser(ProtocolSide):
             self.reset()
 
     def set_protocols(self, protocols: dict[str, type[AbstractProtocol]]):
-        print("Setting protocols")
         self.protocols = protocols
         self.gui.protocol_chooser.clear()
         self.gui.protocol_chooser.addItems(list(protocols.keys()))
