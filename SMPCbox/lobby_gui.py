@@ -26,6 +26,9 @@ class Message:
         self.msg_type = msg_type
         self.data = data
 
+    def __repr__(self) -> str:
+        return f"{self.msg_type.name}: {self.data}"
+
     def encode(self) -> bytes:
         data = self.data.copy()
         data["msg_type"] = self.msg_type.value
@@ -129,12 +132,15 @@ class Host(Client):
             socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
         )
         self.multicast_socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+        self.multicast_socket.bind((MCAST_GROUP, MCAST_PORT))
 
         info = AnnounceMessage(self.name, self.port)
 
         while True:
             msg = Message.from_bytes(self.multicast_socket.recv(BUFFER_SIZE))
+            print("Host received:", msg)
             if msg.is_discovery():
+                print("Host sending:", info)
                 self.multicast_socket.sendto(info.encode(), (MCAST_GROUP, MCAST_PORT))
 
     def heartbeat_check(self):

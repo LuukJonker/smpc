@@ -16,7 +16,7 @@ def rand_int():
 class SecretShareMultiplication(AbstractProtocol):
     protocol_name = "SecretShareMultiplication"
 
-    def __init__(self, l=32):
+    def __init__(self, l: int = 32):
         """
         The opperations are done module 2^l
         """
@@ -73,6 +73,4 @@ if __name__ == "__main__":
 
     p.terminate_protocol()
     print(out)
-    # print("Shared secret (x+y):", (out["Alice"]["x"] + out["Bob"]["y"] ) % pow(2, 32))
-
-
+    print("Shared secret (x+y):", (out["Alice"]["x"] + out["Bob"]["y"] ) % pow(2, 32))

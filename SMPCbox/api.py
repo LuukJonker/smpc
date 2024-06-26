@@ -17,8 +17,8 @@ class ProtocolSide:
     def __init__(self, queue: Queue):
         self.queue = queue
 
-    def add_step(self, step_name: str):
-        self.queue.put((Step.COMMENT, (step_name,)))
+    def add_comment(self, comment: str):
+        self.queue.put((Step.COMMENT, (comment,)))
 
     def add_computation(
         self,

@@ -15,4 +15,6 @@ if __name__ == "__main__":
 
     watcher = ClassWatcher(args.path, callback)
 
+    v.add_atexit(watcher.stop)
+
     v.run_gui()

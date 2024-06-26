@@ -50,6 +50,8 @@ class AbstractProtocol(ABC):
         for name in self.get_party_names():
             self.parties[name] = ProtocolParty(name)
 
+        self.__terminated_protocol = False
+
     def set_protocol_visualiser(self, visualiser: ProtocolSide):
         """
         This method is used by a gui to provide their own implementation of the ProtocolSide.
@@ -172,7 +174,7 @@ class AbstractProtocol(ABC):
         Adds a comment to the protocol visualisation.
         """
         if self.visualiser:
-            self.visualiser.add_step(comment)
+            self.visualiser.add_comment(comment)
 
     def send_variables(
         self,
@@ -401,6 +403,8 @@ class AbstractProtocol(ABC):
             # the addresses do not have to be provided these are in the ProtocolParty instances provided with
             # set_protocol_parties
 
+        if self.visualiser:
+            protocol.set_protocol_visualiser(self.visualiser)
 
         # run the protocol
         protocol()
@@ -469,5 +473,10 @@ class AbstractProtocol(ABC):
         since a protocol might be used as a subroutine in a larger protocol in which case the ProtocolParty instances could still be in use
         even if the protocol ends.
         """
+        if self.__terminated_protocol:
+            return
+
+        self.__terminated_protocol = True
+
         for p in self.parties.values():
             p.exit_protocol()

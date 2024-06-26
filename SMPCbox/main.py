@@ -7,15 +7,10 @@ from SMPCbox.AbstractProtocol import AbstractProtocol
 from SMPCbox.ProtocolParty import ProtocolParty
 from multiprocessing import Process, Queue
 from enum import Enum
-import re
 import inspect
 from SMPCbox.api import Step, ProtocolSide
-
-TIMER_INTERVAL = 10
-
-
-class NoDefault:
-    pass
+import signal
+from .constants import TIMER_INTERVAL, NoDefault
 
 
 class Input:
@@ -24,17 +19,84 @@ class Input:
         self.var_types = var_types
 
     def get_inputs(self):
-        results = self.widget.get_inputs()
+        inputs = self.widget.get_inputs()
 
-        print(results)
+        res: list[tuple[str, Any] | None] = []
 
-        return {
-            name: type_(result)
-            for type_, (name, result) in zip(self.var_types, results.items())
-        }
+        for inp, type_ in zip(inputs, self.var_types):
+            if inp is None:
+                res.append(None)
+            else:
+                res.append((inp[0], type_(inp[1])))
+
+        return res
 
     def create_widget(self, gui: ui.MainWindow):
         self.widget = gui.add_input_step(self.var_names)
+
+
+class Subroutine:
+    def __init__(
+        self,
+        name: str,
+        party_mapping: dict[str, str],
+        input_mapping: dict[str, dict[str, str]],
+        output_mapping: dict[str, dict[str, str]],
+    ):
+        self.name = name
+        self.party_mapping = party_mapping
+        self.input_mapping = input_mapping
+        self.output_mapping = output_mapping
+        self.steps: list[tuple[Step, tuple]] = []
+
+        self.gui: ui.SubroutineWindow | None = None
+
+    def __repr__(self):
+        return f"Subroutine {self.name}"
+
+    def add_step(self, step: Step, args: tuple):
+        self.steps.append((step, args))
+
+        if self.gui:
+            self.handle_step((step, args))
+
+    def on_close(self):
+        self.gui = None
+
+    def show(self):
+        if self.gui:
+            return
+
+        parties = [self.party_mapping[party] for party in self.party_mapping]
+        self.gui = ui.SubroutineWindow(self.name, parties, self.on_close)
+        self.gui.show()
+
+        for step in self.steps:
+            self.handle_step(step)
+
+    def handle_step(self, step: tuple[Step, tuple]):
+        if not self.gui:
+            return
+        try:
+            step_type, args = step
+            if step_type == Step.COMMENT:
+                self.gui.add_comment(args[0])
+            elif step_type == Step.COMPUTATION:
+                self.gui.add_computation_step(*args)
+            elif step_type == Step.SEND:
+                self.gui.add_send_step(*args)
+            elif step_type == Step.BROADCAST:
+                self.gui.add_broadcast_step(*args)
+            elif step_type == Step.SUBROUTINE:
+                self.gui.add_subroutine_step(*args)
+            elif step_type == Step.END_SUBROUTINE:
+                self.gui.add_end_subroutine_step(*args)
+            elif step_type == Step.END_PROTOCOL:
+                ...
+            else:
+                raise ValueError(f"Unknown step type: {step_type}")
+        except Exception as e:
+            print(e)
 
 
 class State(Enum):
@@ -43,17 +105,6 @@ class State(Enum):
     RUNNING = 2
     ONE_STEP = 3
     FINISHED = 4
-
-
-def run_protocol(protocol: AbstractProtocol, queue: Queue):
-    """Starts a protocol and adds the visualizer. Is supposed to be run in a separate process.
-
-    Args:
-        protocol (AbstractProtocol): The protocol to run
-        queue (Queue): The queue to send the steps to
-    """
-    protocol.set_protocol_visualiser(ProtocolSide(queue))
-    protocol.run()
 
 
 class Protocolvisualiser(ProtocolSide):
@@ -80,6 +131,9 @@ class Protocolvisualiser(ProtocolSide):
         self.running_timer: QTimer | None = None
 
         self.inputs: list[Input] = []
+        self.subroutine_stack: list[Subroutine] = []
+
+        self.atexit: list[Callable] = []
 
     def set_status(self, status: State):
         string = status.name.replace("_", " ").capitalize()
@@ -87,19 +141,23 @@ class Protocolvisualiser(ProtocolSide):
 
         self.state = status
 
+    def setup_protocol(self):
+        self.protocol_name = self.gui.protocol_chooser.currentText()
+        self.gui.set_protocol_name(self.protocol_name)
+
+        self.gui.update_party_names([])
+
+        self.gui.list_widget.clear()
+
     def setup_input(self):
         if self.protocol is None:
             return
 
-        self.protocol_name = self.gui.protocol_chooser.currentText()
-
-        self.gui.set_protocol_name(self.protocol.protocol_name)
         self.party_names = self.protocol.get_party_names()
         self.parties = {party: ProtocolParty(party) for party in self.party_names}
         self.gui.update_party_names(self.party_names)
         inp = self.protocol.get_expected_input()
 
-        self.gui.list_widget.clear()
         self.inputs = []
 
         if len(inp) == 0:
@@ -120,6 +178,24 @@ class Protocolvisualiser(ProtocolSide):
         for i in inputs:
             self.add_input(i, [int for _ in i])
 
+    @staticmethod
+    def run_protocol(protocol: AbstractProtocol, queue: Queue):
+        """Starts a protocol and adds the visualizer. Is supposed to be run in a separate process.
+
+        Args:
+            protocol (AbstractProtocol): The protocol to run
+            queue (Queue): The queue to send the steps to
+        """
+        protocol.set_protocol_visualiser(ProtocolSide(queue))
+
+        def signal_handler(signal, frame):
+            protocol.terminate_protocol()
+            raise SystemExit
+
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        protocol.run()
+
     def start_protocol(self):
         if self.protocol is None:
             return
@@ -129,13 +205,12 @@ class Protocolvisualiser(ProtocolSide):
 
         input_dict: dict[str, dict[str, Any]] = {}
 
-        for inp in self.inputs:
-            for party, (prompt, result) in zip(
-                self.party_names, inp.get_inputs().items()
-            ):
-                print(party, prompt, result)
-                if prompt is None or result is None:
+        for input in self.inputs:
+            for party, inp in zip(self.party_names, input.get_inputs()):
+                if inp is None:
                     continue
+
+                prompt, result = inp
 
                 if party not in input_dict:
                     input_dict[party] = {}
@@ -147,7 +222,7 @@ class Protocolvisualiser(ProtocolSide):
         self.queue = Queue()
 
         self.running_protocol = Process(
-            target=run_protocol, args=(self.protocol, self.queue)
+            target=self.run_protocol, args=(self.protocol, self.queue)
         )
         self.running_protocol.start()
 
@@ -160,7 +235,7 @@ class Protocolvisualiser(ProtocolSide):
             step = self.queue.get(block=False)
             self.handle_step(step)
 
-            if self.one_step_timer:
+            if self.one_step_timer and not self.subroutine_stack:
                 self.one_step_timer.stop()
                 self.one_step_timer = None
                 self.set_status(State.PAUSED)
@@ -223,17 +298,15 @@ class Protocolvisualiser(ProtocolSide):
             self.running_timer = None
 
         self.gui.set_paused()
+        self.setup_protocol()
         self.setup_input()
 
     def handle_step(self, step: tuple[Step, tuple]):
         step_type, args = step
         if step_type == Step.COMMENT:
-            self.add_step(args[0])
+            self.add_comment(args[0])
         elif step_type == Step.COMPUTATION:
-            try:
-                self.add_computation(*args)
-            except Exception as e:
-                print(e)
+            self.add_computation(*args)
         elif step_type == Step.SEND:
             self.send_message(*args)
         elif step_type == Step.BROADCAST:
@@ -247,8 +320,11 @@ class Protocolvisualiser(ProtocolSide):
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 
-    def add_step(self, step_name: str):
-        self.gui.add_comment(step_name)
+    def add_comment(self, comment: str):
+        if self.subroutine_stack:
+            self.subroutine_stack[-1].add_step(Step.COMMENT, (comment,))
+        else:
+            self.gui.add_comment(comment)
 
     def add_input(self, var_names: list[str], var_type: list[type]) -> None:
         inst = Input(var_names, var_type)
@@ -268,12 +344,23 @@ class Protocolvisualiser(ProtocolSide):
         computed_vars: dict[str, Any],
         computation: str,
     ):
-        result = self.eclipse(list(computed_vars.values())[0])
-        self.gui.add_computation_step(
-            party_name,
-            f"{list(computed_vars.keys())[0]} = {computation}",
-            result,
-        )
+        result = ", ".join(self.eclipse(value) for value in (computed_vars.values()))
+
+        if self.subroutine_stack:
+            self.subroutine_stack[-1].add_step(
+                Step.COMPUTATION,
+                (
+                    party_name,
+                    f"{', '.join(computed_vars.keys())} = {computation}",
+                    result,
+                ),
+            )
+        else:
+            self.gui.add_computation_step(
+                party_name,
+                f"{', '.join(computed_vars.keys())} = {computation}",
+                result,
+            )
 
     def send_message(
         self,
@@ -284,13 +371,25 @@ class Protocolvisualiser(ProtocolSide):
         for var in variables:
             variables[var] = self.eclipse(variables[var])
 
-        self.gui.add_send_step(
-            sending_party_name, receiving_party_name, variables, variables
-        )
+        if self.subroutine_stack:
+            self.subroutine_stack[-1].add_step(
+                Step.SEND, (sending_party_name, receiving_party_name, variables)
+            )
+        else:
+            self.gui.add_send_step(sending_party_name, receiving_party_name, variables)
 
     def broadcast_variable(self, party_name: str, variables: dict[str, Any]):
         variables_list = list(variables.keys())
-        self.gui.add_broadcast_step(party_name, variables_list)
+
+        for var in variables:
+            variables[var] = self.eclipse(variables[var])
+
+        if self.subroutine_stack:
+            self.subroutine_stack[-1].add_step(
+                Step.BROADCAST, (party_name, variables_list)
+            )
+        else:
+            self.gui.add_broadcast_step(party_name, variables_list)
 
     def start_subroutine(
         self,
@@ -306,17 +405,34 @@ class Protocolvisualiser(ProtocolSide):
             else:
                 clients.append("")
 
-        self.gui.add_subroutine_step(subroutine_name, clients)
+        subroutine_object = Subroutine(subroutine_name, party_mapping, input_mapping, output_mapping)
+
+        if self.subroutine_stack:
+            self.subroutine_stack[-1].add_step(
+                Step.SUBROUTINE,
+                (subroutine_name, clients, subroutine_object),
+            )
+        else:
+            self.gui.add_subroutine_step(subroutine_name, clients, subroutine_object)
+
+        self.subroutine_stack.append(
+            subroutine_object
+        )
 
     def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
-        self.gui.add_end_subroutine_step(output_values)
+        self.subroutine_stack.pop()
+
+        if self.subroutine_stack:
+            self.subroutine_stack.pop().add_step(Step.END_SUBROUTINE, (output_values,))
+        else:
+            self.gui.add_end_subroutine_step(output_values)
 
     def end_protocol(self):
         self.set_status(State.FINISHED)
         self.gui.set_finished()
 
     @staticmethod
-    def get_function_params(func: Callable) -> dict[str, Any]:
+    def get_function_params(func: Callable) -> dict[str, dict[str, Any]]:
         signature = inspect.signature(func)
         params = {}
         for name, param in signature.parameters.items():
@@ -335,34 +451,53 @@ class Protocolvisualiser(ProtocolSide):
             params[name] = param_info
         return params
 
-    def choose_protocol(self, protocol_class: type["AbstractProtocol"]):
-        d = self.get_function_params(protocol_class.__init__)
-        del d["self"]
+    def start_protocol_with_arguments(
+        self, protocol_class: type["AbstractProtocol"], kwargs: dict[str, Any]
+    ):
+        self.protocol = protocol_class(**kwargs)
+        self.reset()
 
-        self.protocol = protocol_class()
+    def choose_protocol(self, protocol_class: type["AbstractProtocol"]):
+        params = self.get_function_params(protocol_class.__init__)
+        del params["self"]
+
+        if params:
+            self.protocol = None
+            self.gui.get_starting_values(
+                params,
+                lambda kwargs: self.start_protocol_with_arguments(
+                    protocol_class, kwargs
+                ),
+            )
+            self.reset()
+        else:
+            self.gui.protocol_input_list.clear()
+            self.protocol = protocol_class()
+            self.reset()
 
     def set_protocols(self, protocols: dict[str, type[AbstractProtocol]]):
+        print("Setting protocols")
         self.protocols = protocols
-        self.gui.protocol_chooser.currentIndexChanged.disconnect()
         self.gui.protocol_chooser.clear()
         self.gui.protocol_chooser.addItems(list(protocols.keys()))
 
-        if self.protocol_name:
-            self.gui.protocol_chooser.setCurrentText(self.protocol_name)
-            self.choose_protocol(self.protocols[self.protocol_name])
-        else:
-            self.choose_protocol(
-                list(protocols.values())[self.gui.protocol_chooser.currentIndex()]
-            )
-
-        self.gui.protocol_chooser.currentIndexChanged.connect(self.protocol_changed)
-
-        self.reset()
+        # if self.protocol_name:
+        #     self.gui.protocol_chooser.setCurrentText(self.protocol_name)
+        #     self.choose_protocol(self.protocols[self.protocol_name])
+        # else:
+        #     self.choose_protocol(
+        #         list(protocols.values())[self.gui.protocol_chooser.currentIndex()]
+        #     )
 
     def protocol_changed(self, index: int):
         self.choose_protocol(list(self.protocols.values())[index])
-        self.reset()
 
     def on_close(self):
         if self.running_protocol:
             self.running_protocol.terminate()
+
+        for func in self.atexit:
+            func()
+
+    def add_atexit(self, func: Callable):
+        self.atexit.append(func)
