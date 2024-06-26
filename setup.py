@@ -8,7 +8,7 @@ This framework is meant to help researchers and students to better understand SM
 """
 
 setup(name='SMPCbox',
-      version='1.0.2',
+      version='1.0.6',
       description='A framework for implementation of secure multi party computation protocols',
       author='Bas Jansweijer, Luuk Jonker, Zoltan Mann',
       author_email='bas.jansweijer@student.uva.nl, luuk.jonker@student.uva.nl',
