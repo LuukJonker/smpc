@@ -71,3 +71,11 @@ Then run:
 ```
 This will then prompt you to enter an API token for PyPI
 
+### Work on Docs
+We use shpinx (pip install sphinx)
+Make any changes in the docs/source folder.
+Then run either of the following commands depending on the prefered format:
+```bash
+make html
+make latexpdf
+```

@@ -27,8 +27,8 @@ SMPCbox provides the following key features:
    :caption: Contents:
 
    instalation
-   protocol_implementation
    using_protocols
+   protocol_implementation
 
 Indices and tables
 ==================
