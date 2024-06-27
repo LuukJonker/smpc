@@ -3,7 +3,7 @@ import os
 import time
 import importlib.util
 import inspect
-from threading import Thread
+from threading import Thread, Event
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from SMPCbox.AbstractProtocol import AbstractProtocol
@@ -49,6 +49,7 @@ class ClassWatcher:
         self.module_cache: dict[str, ModuleInfo] = {}
         self.verbose = verbose
         self.callback = callback
+        self.stop_event = Event()
 
         self.path_to_watch = os.path.abspath(path_to_watch)
         if not os.path.isdir(self.path_to_watch):
@@ -66,7 +67,6 @@ class ClassWatcher:
         observer = Observer()
         observer.schedule(event_handler, path=self.path_to_watch, recursive=True)
         observer_thread = Thread(target=self._run_observer, args=(observer,))
-        observer_thread.daemon = True
         observer_thread.start()
 
         if self.verbose:
@@ -79,12 +79,14 @@ class ClassWatcher:
         :param observer: The watchdog observer instance.
         """
         observer.start()
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            observer.stop()
+
+        self.stop_event.wait()
+
+        observer.stop()
         observer.join()
+
+    def stop(self):
+        self.stop_event.set()
 
     def _get_module_name(self, filepath):
         """
@@ -201,8 +203,6 @@ class FileChangeHandler(FileSystemEventHandler):
         if self.verbose:
             print(f"Loaded module: {module_name}")
 
-        print(f"Loaded module: {module_name}")
-
         if not initial_load:
             self._run_callback()
 
@@ -221,7 +221,7 @@ class FileChangeHandler(FileSystemEventHandler):
 
             if self.verbose:
                 print(f"Reloaded module: {module_name}")
-            print(f"Reloaded module: {module_name}")
+
             self._run_callback()
         else:
             self._load_module(filepath, ChangeType.NEW)
@@ -254,7 +254,7 @@ class FileChangeHandler(FileSystemEventHandler):
             self.callback()
 
 
-def callback(watcher: ClassWatcher):
+def test_callback(watcher: ClassWatcher):
     print("Classes in watched files:")
     for class_name, class_obj in watcher.get_changed_classes():
         print(f"{class_name}: {class_obj.protocol_name}")
@@ -267,7 +267,7 @@ if __name__ == "__main__":
 
     path_to_watch = sys.argv[1]
 
-    watcher = ClassWatcher(path_to_watch, callback)
+    watcher = ClassWatcher(path_to_watch, test_callback)
 
     while True:
         time.sleep(1)

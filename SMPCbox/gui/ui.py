@@ -8,406 +8,21 @@ from PyQt5.QtWidgets import (
     QListWidget,
     QPushButton,
     QListWidgetItem,
-    QHBoxLayout,
-    QLineEdit,
     QComboBox,
 )
-from PyQt5.QtCore import Qt, QPoint, QSize, QEvent
-from PyQt5 import QtCore
-from PyQt5.QtGui import QPainter, QPen, QColor, QCursor
-import math
-from pyqt_toast import Toast
-
-
-class Section(QWidget):
-    def __init__(
-        self,
-        text: str,
-        extra_text: str = "",
-        background_color="lightblue",
-        border_color="blue",
-    ):
-        super().__init__()
-
-        self.text = text
-        self.extra_text = extra_text
-        self.background_color = background_color
-        self.border_color = border_color
-
-        self.setStyleSheet(
-            f"""
-            QFrame {{background-color: {background_color}; border: 2px solid {border_color}; border-radius: 5px;}}
-            QLabel {{border: none; border-radius: 0px; text-align: center;}}
-            """
-        )
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(40, 10, 40, 10)  # Add margins around the widget
-        layout.setSpacing(40)  # Add spacing between elements
-
-        self.frame = QFrame()
-        self.label1 = QLabel(text)
-        self.label1.setAlignment(Qt.AlignCenter)  # type: ignore
-        self.label2 = QLabel("")
-        self.label2.setAlignment(Qt.AlignCenter)  # type: ignore
-        layout.addWidget(self.label1)
-
-        if extra_text:
-            extra_layout = QHBoxLayout()
-            self.extra_frame = QFrame()
-            self.extra_label = QLabel(extra_text)
-
-            extra_layout.addWidget(self.extra_label)
-            extra_layout.addWidget(self.label2)
-            self.extra_frame.setLayout(extra_layout)
-            layout.addWidget(self.extra_frame)
-
-        else:
-            layout.addWidget(self.label2)
-
-        self.frame.setLayout(layout)
-
-        frame_layout = QVBoxLayout()
-        frame_layout.addWidget(self.frame)
-        self.setLayout(frame_layout)
-
-    def add_computation(self, text):
-        self.extra_text = text
-        self.label2.setText(text)
-
-    def disappear(self):
-        self.setStyleSheet("")
-
-    def reappear(self):
-        self.setStyleSheet(
-            f"""
-            QFrame {{background-color: {self.background_color}; border: 2px solid {self.border_color}; border-radius: 5px;}}
-            QLabel {{border: none; border-radius: 0px; text-align: center;}}
-            """
-        )
-
-
-class Input(QWidget):
-    def __init__(self, prompt: str, background_color="lightgrey", border_color="grey"):
-        super().__init__()
-        self.setStyleSheet(
-            f"""
-            QFrame {{background-color: {background_color}; border: 2px solid {border_color}; border-radius: 5px;}}
-            QLabel {{border: none; border-radius: 0px; text-align: center;}}
-            """
-        )
-
-        if prompt == "":
-            self.setStyleSheet("opacity: 0; color: white; border: none; background-color: none;")
-
-        layout = QHBoxLayout()
-
-        self.prompt = prompt
-
-        self.frame = QFrame()
-        self.prompt_label = QLabel(f"{prompt}: ")
-        self.input = QLineEdit()
-
-        layout.addWidget(self.prompt_label)
-        layout.addWidget(self.input)
-        self.frame.setLayout(layout)
-
-        frame_layout = QVBoxLayout()
-        frame_layout.addWidget(self.frame)
-        self.setLayout(frame_layout)
-
-    def get_input(self):
-        return self.input.text()
-
-
-class CalculationWidget(QWidget):
-    def __init__(self, calculations: list[str]):
-        super().__init__()
-
-        layout = QGridLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        layout.setHorizontalSpacing(50)  # Add horizontal spacing between columns
-        layout.setVerticalSpacing(10)  # Add vertical spacing between rows
-
-        self.sections = [Section(calculation) for calculation in calculations]
-        for i, column in enumerate(self.sections):
-            layout.addWidget(column, 0, i)
-
-            if column.label1.text() == "":
-                column.disappear()
-
-        self.setLayout(layout)
-
-    def display_result(self, results: list[str]):
-        for i, result in enumerate(results):
-            self.sections[i].label2.setText(result)
-
-    def reset(self):
-        for section in self.sections:
-            section.label2.setText("")
-
-    def update_calculation(self, index: int, calculation: str):
-        self.sections[index].label1.setText(calculation)
-        self.sections[index].reappear()
-
-    def update_result(self, index: int, result: str):
-        self.sections[index].label2.setText(result)
-
-
-class SendReceiveWidget(QWidget):
-    def __init__(
-        self,
-        num_columns: int,
-        sender: int,
-        receiver: int,
-        from_variables: list[str],
-        to_variables: list[str],
-    ):
-        super().__init__()
-
-        layout = QGridLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        layout.setHorizontalSpacing(100)  # Add horizontal spacing between columns
-        layout.setVerticalSpacing(10)  # Add vertical spacing between rows
-
-        for i in range(num_columns):
-            if i != sender and i != receiver:
-                layout.addWidget(
-                    Section("", background_color="none", border_color="none"), 0, i
-                )
-
-        self.send_section = Section(
-            f"""Send\n{str(from_variables).replace("'", "")}""",
-            background_color="lightgreen",
-            border_color="green",
-        )
-        self.receive_section = Section(
-            f"""Receive\n{str(to_variables).replace("'", "")}""",
-            background_color="lightcoral",
-            border_color="red",
-        )
-        layout.addWidget(self.send_section, 0, sender)
-        layout.addWidget(self.receive_section, 0, receiver)
-
-        self.setLayout(layout)
-
-        self.sender_col = sender
-        self.receiver_col = receiver
-        self.num_columns = num_columns
-
-    def display_result(self, results: list[str]):
-        self.send_section.add_computation(str(results).replace("'", ""))
-        self.receive_section.add_computation(str(results).replace("'", ""))
-
-    def reset(self):
-        self.send_section.label2.setText("")
-        self.receive_section.label2.setText("")
-
-    def paintEvent(self, a0):
-        super().paintEvent(a0)
-        painter = QPainter(self)
-        pen = QPen(QColor("black"))
-        pen.setWidth(2)
-        painter.setPen(pen)
-
-        send_rect = self.send_section.geometry()
-        receive_rect = self.receive_section.geometry()
-
-        if self.sender_col < self.receiver_col:
-            start_point = send_rect.topRight()
-            end_point = receive_rect.topLeft()
-        else:
-            start_point = send_rect.topLeft()
-            end_point = receive_rect.topRight()
-
-        start_point.setY(start_point.y() + send_rect.height() // 2)
-        end_point.setY(end_point.y() + receive_rect.height() // 2)
-
-        painter.drawLine(start_point, end_point)
-
-        angle = -math.atan2(
-            end_point.y() - start_point.y(), end_point.x() - start_point.x()
-        )
-
-        arrow_head_size = 10
-        arrow_p1 = end_point - QPoint(
-            int(arrow_head_size * math.cos(angle + math.pi / 6)),
-            int(arrow_head_size * math.sin(angle + math.pi / 6)),
-        )
-        arrow_p2 = end_point - QPoint(
-            int(arrow_head_size * math.cos(angle - math.pi / 6)),
-            int(arrow_head_size * math.sin(angle - math.pi / 6)),
-        )
-
-        painter.drawLine(end_point, arrow_p1)
-        painter.drawLine(end_point, arrow_p2)
-
-
-class BroadcastWidget(QWidget):
-    def __init__(self, party_name: str, variables: list[str]):
-        super().__init__()
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        layout.setSpacing(20)  # Add spacing between elements
-
-        self.section = Section(
-            f"Broadcast from {party_name}",
-            extra_text=str(variables).replace("'", ""),
-            background_color="lightyellow",
-            border_color="orange",
-        )
-
-        layout.addWidget(self.section)
-
-        self.setLayout(layout)
-
-    def display_result(self, results: list[str]):
-        self.section.label2.setText(str(results).replace("'", ""))
-
-    def reset(self):
-        self.section.label2.setText("")
-
-
-class SubroutineWidget(QWidget):
-    def __init__(self, subroutine_name: str, clients: list[str]):
-        super().__init__()
-
-        self.setStyleSheet(
-            """
-            QFrame { background-color: #9370DB; border: 2px solid #8A2BE2; border-radius: 5px; color: white; }
-            QLabel { border: none; border-radius: 0px; text-align: center; }
-
-            """
-        )
-
-        root_layout = QVBoxLayout()
-
-        root_frame = QFrame()
-
-        main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        main_layout.setSpacing(20)  # Add spacing between elements
-
-        main_layout.addWidget(QLabel(subroutine_name))
-
-        grid_frame = QFrame()
-
-        grid_frame.setStyleSheet(
-            """
-            QFrame { background-color: none; border: none; color: white; }
-            """
-        )
-
-        grid_layout = QGridLayout()
-        grid_layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        grid_layout.setSpacing(20)  # Add spacing between elements
-
-        self.sections = []
-
-        for i, client in enumerate(clients):
-            if client:
-                section = Section(
-                    f"{client}",
-                    background_color="#7B68EE",
-                    border_color="none",
-                )
-            else:
-                section = Section(
-                    "",
-                    background_color="none",
-                    border_color="none",
-                )
-                section.disappear()
-
-            self.sections.append(section)
-            grid_layout.addWidget(section, 0, i)
-
-        grid_frame.setLayout(grid_layout)
-
-        root_frame.setLayout(main_layout)
-        root_layout.addWidget(root_frame)
-
-        main_layout.addWidget(grid_frame)
-
-        self.setLayout(root_layout)
-
-    def display_result(self, results: list[str]):
-        self.section.label2.setText(str(results).replace("'", ""))
-
-    def reset(self):
-        self.section.label2.setText("")
-
-    def eventFilter(self, a0, a1):
-        obj, event = a0, a1
-
-        if event and event.type() == QEvent.MouseButtonPress:  # type: ignore
-            self.on_click()
-            return True
-        return super().eventFilter(obj, event)
-
-    def on_click(self):
-        print("Widget clicked")
-
-
-class CommentWidget(QWidget):
-    def __init__(self, step_name: str):
-        super().__init__()
-
-        self.setStyleSheet(
-            """
-            QWidget {background-color: lightgrey; border: 2px solid grey; border-radius: 5px;}
-            """
-        )
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        layout.setSpacing(20)  # Add spacing between elements
-
-        # Set label in the middle of the widget
-        self.section = QLabel(step_name)
-        self.section.setAlignment(Qt.AlignCenter)  # type: ignore
-
-        layout.addWidget(self.section)
-
-        self.setLayout(layout)
-
-    def display_result(self, results: list[str]):
-        self.section.label2.setText(str(results).replace("'", ""))
-
-    def reset(self):
-        self.section.label2.setText("")
-
-
-class InputWidget(QWidget):
-    def __init__(self, inputs: list[str]):
-        super().__init__()
-
-        layout = QGridLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the widget
-        layout.setHorizontalSpacing(100)  # Add horizontal spacing between columns
-        layout.setVerticalSpacing(10)  # Add vertical spacing between rows
-
-        self.inputs = [
-            (
-                Input(input)
-                if input
-                else Input("")
-            )
-            for input in inputs
-        ]
-        for i, input in enumerate(self.inputs):
-            layout.addWidget(input, 0, i)
-
-        self.setLayout(layout)
-
-    def get_inputs(self):
-        return {input.prompt if input else None : input.get_input() if input else None for input in self.inputs}
-
-    def reset(self):
-        for input in self.inputs:
-            if input:
-                input.input.setText("")
+from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QCursor
+from typing import Any, Callable
+from SMPCbox.constants import NoDefault
+from SMPCbox.ProtocolParty import TrackedStatistics
+from .statistics import StatisticsWidget
+
+from .comment import CommentWidget
+from .input import InputWidget, Input
+from .calculation import CalculationWidget
+from .send_receive import SendReceiveWidget
+from .broadcast import BroadcastWidget
+from .subroutine import SubroutineWidget
 
 
 class StyledButton(QPushButton):
@@ -415,7 +30,7 @@ class StyledButton(QPushButton):
         super().__init__(text, parent)
         self.color_scheme = color_scheme
         self.setStyleSheet(self.get_button_style())
-        self.setCursor(QCursor(QtCore.Qt.PointingHandCursor))  # type: ignore
+        self.setCursor(QCursor(Qt.PointingHandCursor))  # type: ignore
 
     def get_button_style(self):
         color_schemes = {
@@ -479,7 +94,8 @@ class NoHighlightListWidget(QListWidget):
     def __init__(self):
         super().__init__()
 
-        self.setStyleSheet("""
+        self.setStyleSheet(
+            """
             QListWidget::item {
                 background: transparent;
                 border: none;
@@ -489,12 +105,18 @@ class NoHighlightListWidget(QListWidget):
                 background: transparent;
                 color: black;
             }
-        """)
+        """
+        )
 
 
 class MainWindow(QMainWindow):
     def __init__(
-        self, parties: list[str], one_step_callback, run_callback, reset_callback
+        self,
+        parties: list[str],
+        one_step_callback: Callable,
+        run_callback: Callable,
+        reset_callback: Callable,
+        on_close: Callable,
     ):
         super().__init__()
         self.setWindowTitle("SMPC Visualiser")
@@ -503,22 +125,34 @@ class MainWindow(QMainWindow):
 
         self.protocol_chooser = QComboBox()
 
+        self.protocol_input_list = NoHighlightListWidget()
+        self.protocol_input_list.setFixedHeight(100)
+
         self.client_frame = QFrame()
-        client_layout = QGridLayout()
+        self.client_layout = QGridLayout()
         for i, party in enumerate(parties):
-            client_layout.addWidget(QLabel(party), 0, i)
-        self.client_frame.setLayout(client_layout)
+            label = QLabel(party)
+            label.setAlignment(Qt.AlignCenter)  # type: ignore
+            self.client_layout.addWidget(label, 0, i)
+        self.client_frame.setLayout(self.client_layout)
 
         self.list_widget = NoHighlightListWidget()
+        self.list_widget.itemClicked.connect(self.on_item_click)
+
+        self.status_label = QLabel("Status: Not started")
 
         self.one_step_button = StyledButton("One step", color_scheme="green")
         self.run_button = StyledButton("Run", color_scheme="blue")
         self.reset_button = StyledButton("Reset", color_scheme="red")
 
+        self.on_close = on_close
+
         layout = QVBoxLayout()
         layout.addWidget(self.protocol_chooser)
+        layout.addWidget(self.protocol_input_list)
         layout.addWidget(self.client_frame)
         layout.addWidget(self.list_widget)
+        layout.addWidget(self.status_label)
         layout.addWidget(self.one_step_button)
         layout.addWidget(self.run_button)
         layout.addWidget(self.reset_button)
@@ -536,29 +170,101 @@ class MainWindow(QMainWindow):
 
         self.party_indexes = {party: 0 for party in parties}
 
-        self.updated_toast = Toast("Protocols have been updated, reset to show changes.", duration=3, parent=self)
+    def closeEvent(self, a0):
+        super().closeEvent(a0)
+        self.on_close()
 
     def set_protocol_name(self, protocol_name: str):
         self.setWindowTitle(f"{protocol_name} - SMPC Visualiser")
 
+    def set_status(self, status: str):
+        self.status_label.setText(f"Status: {status}")
+
     def set_running(self):
         self.one_step_button.setEnabled(False)
         self.run_button.setText("Pause")
+        self.run_button.setEnabled(True)
         self.reset_button.setEnabled(False)
 
     def set_paused(self):
         self.one_step_button.setEnabled(True)
         self.run_button.setText("Run")
+        self.run_button.setEnabled(True)
         self.reset_button.setEnabled(True)
 
+    def start_one_step(self):
+        self.one_step_button.setEnabled(False)
+        self.run_button.setEnabled(True)
+
+    def end_one_step(self):
+        self.one_step_button.setEnabled(True)
+        self.run_button.setEnabled(True)
+
+    def set_finished(self):
+        self.one_step_button.setEnabled(False)
+        self.run_button.setEnabled(False)
+        self.run_button.setText("Run")
+        self.reset_button.setEnabled(True)
+
+    def clear_layout(self, layout):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget() is not None:
+                    child.widget().deleteLater()
+
     def update_party_names(self, parties: list[str]):
-        client_layout = QGridLayout()
+        self.clear_layout(self.client_frame.layout())
+
         for i, party in enumerate(parties):
-            client_layout.addWidget(QLabel(party), 0, i)
-        self.client_frame.setLayout(client_layout)
+            label = QLabel(party)
+            label.setAlignment(Qt.AlignCenter)  # type: ignore
+            self.client_layout.addWidget(label, 0, i)
 
         self.num_parties = len(parties)
         self.party_indexes = {party: 0 for party in parties}
+
+    def get_starting_values(self, kwargs: dict[str, Any], callback: Callable):
+        input_widgets: list[Input] = []
+
+        def on_change(display_error: bool = True):
+            input_map = {widget.prompt: widget for widget in input_widgets}
+            values = {}
+
+            for key, value in kwargs.items():
+                input_widget = input_map[key]
+                try:
+                    type_ = value["type"]
+                    values[key] = type_(input_widget.get_input())
+                except ValueError as e:
+                    if display_error:
+                        input_widget.display_error(str(e))
+                    return
+
+                input_widget.display_error("")
+
+            callback(values)
+
+        self.protocol_input_list.clear()
+
+        for key, value in kwargs.items():
+            # Create inputs for each key-value pair
+            widget = Input(key)
+            default = value["default"]
+            if default is not None and default is not NoDefault:
+                widget.set_input(str(default))
+            widget.on_change(on_change)
+            input_widgets.append(widget)
+            list_item = QListWidgetItem(self.protocol_input_list)
+            list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
+            self.protocol_input_list.setItemWidget(list_item, widget)
+
+        on_change(False)
+
+    def on_item_click(self, item: QListWidgetItem):
+        widget = self.list_widget.itemWidget(item)
+        if isinstance(widget, SubroutineWidget):
+            widget.on_click()
 
     def add_comment(self, comment: str) -> CommentWidget:
         widget = CommentWidget(comment)
@@ -606,14 +312,13 @@ class MainWindow(QMainWindow):
         self,
         sender: str,
         receiver: str,
-        from_variables: list[str],
-        to_variables: list[str],
+        variables: dict[str, Any],
     ):
         sender_pos = self.get_party_index(sender)
         receiver_pos = self.get_party_index(receiver)
 
         widget = SendReceiveWidget(
-            self.num_parties, sender_pos, receiver_pos, from_variables, to_variables
+            self.num_parties, sender_pos, receiver_pos, variables
         )
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
@@ -633,8 +338,8 @@ class MainWindow(QMainWindow):
 
         return widget
 
-    def add_subroutine_step(self, subroutine_name: str, clients: list[str]):
-        widget = SubroutineWidget(subroutine_name, clients)
+    def add_subroutine_step(self, subroutine_name: str, clients: list[str], subroutine_object: object):
+        widget = SubroutineWidget(subroutine_name, clients, subroutine_object)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
@@ -643,6 +348,38 @@ class MainWindow(QMainWindow):
 
         return widget
 
+    def add_end_subroutine_step(self, output_values: dict[str, dict[str, str]]):
+        indexes = list(self.party_indexes.values())
+        index = indexes[0]
+
+        # Check if all indexes are the same.
+        if all(i == index for i in indexes):
+            item = self.list_widget.item(index - 1)
+            widget = self.list_widget.itemWidget(item)
+            if widget is None:
+                raise ValueError("End of subroutine called without a widget.")
+
+            if not isinstance(widget, SubroutineWidget):
+                raise ValueError(
+                    "End of subroutine called without a subroutine widget."
+                )
+
+            widget.display_result(output_values)
+        else:
+            raise ValueError(
+                "The indexes of the parties are not the same with a call to end_subroutine."
+            )
+
+    def add_statistics(self, party_statistics: dict[str, TrackedStatistics], total_statistics: TrackedStatistics):
+        widget = StatisticsWidget(party_statistics, total_statistics)
+        print("Here", party_statistics)
+        list_item = QListWidgetItem(self.list_widget)
+        list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
+        self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
+
     def get_party_index(self, party_name: str):
         return list(self.party_indexes.keys()).index(party_name)
 
@@ -650,3 +387,21 @@ class MainWindow(QMainWindow):
         highest_index = max(self.party_indexes.values())
         for party in self.party_indexes:
             self.party_indexes[party] = highest_index + 1
+
+class SubroutineWindow(MainWindow):
+    def __init__(
+        self,
+        name: str,
+        parties: list[str],
+        on_close: Callable,
+    ):
+        super().__init__(parties, lambda: None, lambda: None, lambda: None, on_close)
+
+        self.setWindowTitle(f"SMPC Visualiser - {name}")
+
+        self.protocol_chooser.hide()
+        self.protocol_input_list.hide()
+        self.status_label.hide()
+        self.one_step_button.hide()
+        self.run_button.hide()
+        self.reset_button.hide()

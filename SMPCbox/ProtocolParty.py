@@ -81,11 +81,11 @@ class ProtocolParty ():
         for var in self.not_yet_received_vars.keys():
             if var.startswith(old_prefix):
                 unreceived_vars.append(var)
-        
+
         for var in unreceived_vars:
             # retrieve the variable to flush it from the SMPCSocket
             self.get_variable(var)
-    
+
     def print_local_variables(self):
         print(self.__local_variables)
 
@@ -129,7 +129,7 @@ class ProtocolParty ():
 
     def run_computation(self, computed_vars: Union[str, list[str]], computation: Callable, description: str):
         # make sure the computed_vars are a list
-        computed_vars = [computed_vars] if type(computed_vars) == str else computed_vars
+        computed_vars = [computed_vars] if isinstance(computed_vars, str) else computed_vars
 
         # add the namespace to the computed_var names
         computed_vars = [self.get_namespace() + name for name in computed_vars]

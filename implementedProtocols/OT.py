@@ -29,20 +29,20 @@ def getRSAvars():
 
 
 class OT(AbstractProtocol):
-    protocol_name="ObliviousTransfer"
+    protocol_name="Oblivi"
 
     def __init__(self):
         super().__init__()
 
     def input_variables(self) -> dict[str, list[str]]:
         return {"Sender":["m0","m1"],"Receiver":["b"]}
-    
+
     def party_names(self) -> list[str]:
         return ["Sender", "Receiver"]
-    
+
     def output_variables(self) -> dict[str, list[str]]:
         return {"Receiver": ["mb"]}
-    
+
     def __call__(self):
         p_send = self.parties["Sender"]
         p_recv = self.parties["Receiver"]

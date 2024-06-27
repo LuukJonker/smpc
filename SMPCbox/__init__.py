@@ -1,4 +1,4 @@
-from .AbstractProtocol import AbstractProtocol, AbstractProtocolVisualiser, local
+from .AbstractProtocol import AbstractProtocol, local
 from .ProtocolParty import TrackedStatistics, ProtocolParty
 from .exceptions import *
 
