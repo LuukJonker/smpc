@@ -81,11 +81,11 @@ class ProtocolParty ():
         for var in self.not_yet_received_vars.keys():
             if var.startswith(old_prefix):
                 unreceived_vars.append(var)
-        
+
         for var in unreceived_vars:
             # retrieve the variable to flush it from the SMPCSocket
             self.get_variable(var)
-    
+
     def print_local_variables(self):
         print(self.__local_variables)
 

@@ -4,13 +4,14 @@ import threading
 import time
 from PyQt5 import QtWidgets
 import json
-from typing import Any
+from typing import Any, Dict, Tuple
 from enum import Enum
 
 MCAST_GROUP = "224.1.1.1"
 MCAST_PORT = 5007
 BUFFER_SIZE = 1024
 HEARTBEAT_INTERVAL = 5  # seconds
+DISCOVERY_INTERVAL = 5  # seconds
 TIMEOUT_INTERVAL = 15  # seconds
 
 
@@ -19,10 +20,10 @@ class MessageType(Enum):
     ANNOUNCE = "ANNOUNCE"
     HEARTBEAT = "HEARTBEAT"
     JOIN = "JOIN"
-
+    MEMBERS = "MEMBERS"
 
 class Message:
-    def __init__(self, msg_type: MessageType, data: dict[str, Any]) -> None:
+    def __init__(self, msg_type: MessageType, data: Dict[str, Any]) -> None:
         self.msg_type = msg_type
         self.data = data
 
@@ -48,26 +49,14 @@ class Message:
             return HeartbeatMessage(msg["port"])
         elif msg_type == MessageType.JOIN:
             return JoinMessage(msg["name"], msg["port"])
+        elif msg_type == MessageType.MEMBERS:
+            return MemberMessage(msg["members"])
         else:
             raise ValueError(f"Unknown message type: {msg_type}")
-
-    def is_discovery(self) -> bool:
-        return self.msg_type == MessageType.DISCOVERY
-
-    def is_announce(self) -> bool:
-        return isinstance(self, AnnounceMessage)
-
-    def is_heartbeat(self) -> bool:
-        return self.msg_type == MessageType.HEARTBEAT
-
-    def is_join(self) -> bool:
-        return self.msg_type == MessageType.JOIN
-
 
 class DiscoveryMessage(Message):
     def __init__(self) -> None:
         super().__init__(MessageType.DISCOVERY, {})
-
 
 class AnnounceMessage(Message):
     def __init__(self, name: str, port: int) -> None:
@@ -75,12 +64,10 @@ class AnnounceMessage(Message):
         self.name = name
         self.port = port
 
-
 class HeartbeatMessage(Message):
     def __init__(self, port: int) -> None:
         super().__init__(MessageType.HEARTBEAT, {"port": port})
         self.port = port
-
 
 class JoinMessage(Message):
     def __init__(self, name: str, port: int) -> None:
@@ -88,10 +75,15 @@ class JoinMessage(Message):
         self.name = name
         self.port = port
 
+class MemberMessage(Message):
+    def __init__(self, members: list[tuple]) -> None:
+        super().__init__(MessageType.MEMBERS, {"members": members})
+        self.members = members
 
 class Client:
     def __init__(self, gui: QtWidgets.QWidget) -> None:
         self.gui = gui
+        self.running = True
 
     def refresh(self):
         multicast_socket = socket.socket(
@@ -99,7 +91,10 @@ class Client:
         )
         multicast_socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
         multicast_socket.sendto(DiscoveryMessage().encode(), (MCAST_GROUP, MCAST_PORT))
+        multicast_socket.close()
 
+    def stop(self):
+        self.running = False
 
 class Host(Client):
     def __init__(self, name: str, gui: QtWidgets.QWidget) -> None:
@@ -112,6 +107,7 @@ class Host(Client):
 
     def serve(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(("0.0.0.0", 0))  # Bind to a random available port
         self.port = self.server_socket.getsockname()[1]
         self.server_socket.listen(5)
@@ -120,72 +116,113 @@ class Host(Client):
         self.heartbeat_timer = threading.Timer(HEARTBEAT_INTERVAL, self.heartbeat_check)
         self.heartbeat_timer.start()
 
-        while True:
-            peer_socket, address = self.server_socket.accept()
-            print(f"Connection from {address} has been established.")
-            self.participants.append((peer_socket, address))
-            self.gui.add_peer(address[0], address[1])
-            threading.Thread(target=self.listen_to_participant, args=(peer_socket,)).start()
+        while self.running:
+            try:
+                self.server_socket.settimeout(1)
+                peer_socket, address = self.server_socket.accept()
+                threading.Thread(target=self.listen_to_participant, args=(peer_socket, address)).start()
+            except socket.timeout:
+                continue
+
+        self.server_socket.close()
 
     def broadcast_announcement(self):
         self.multicast_socket = socket.socket(
             socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
         )
+        self.multicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.multicast_socket.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
-        self.multicast_socket.bind((MCAST_GROUP, MCAST_PORT))
+        self.multicast_socket.bind(('', MCAST_PORT))
+
+        mreq = socket.inet_aton(MCAST_GROUP) + socket.inet_aton("0.0.0.0")
+        self.multicast_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
         info = AnnounceMessage(self.name, self.port)
 
-        while True:
-            msg = Message.from_bytes(self.multicast_socket.recv(BUFFER_SIZE))
-            print("Host received:", msg)
-            if msg.is_discovery():
-                print("Host sending:", info)
-                self.multicast_socket.sendto(info.encode(), (MCAST_GROUP, MCAST_PORT))
+        while self.running:
+            try:
+                self.multicast_socket.settimeout(1)
+                msg = Message.from_bytes(self.multicast_socket.recv(BUFFER_SIZE))
+                print("Host received:", msg)
+                if isinstance(msg, DiscoveryMessage):
+                    print("Host sending:", info)
+                    self.multicast_socket.sendto(info.encode(), (MCAST_GROUP, MCAST_PORT))
+            except socket.timeout:
+                continue
+
+        self.multicast_socket.close()
 
     def heartbeat_check(self):
+        if not self.running:
+            return
         for participant in self.participants:
             try:
                 participant[0].send(HeartbeatMessage(self.port).encode())
             except:
                 self.participants.remove(participant)
                 self.gui.remove_peer(participant[1][0])
+        self.heartbeat_timer = threading.Timer(HEARTBEAT_INTERVAL, self.heartbeat_check)
+        self.heartbeat_timer.start()
 
-    def listen_to_participant(self, peer_socket):
-        while True:
+    def listen_to_participant(self, peer_socket: socket.socket, address):
+        join_message = Message.from_bytes(peer_socket.recv(BUFFER_SIZE))
+        if not isinstance(join_message, JoinMessage):
+            peer_socket.close()
+            return
+
+        self.participants.append((peer_socket, join_message.name, address))
+
+        self.gui.add_peer(join_message.name, address[0], join_message.port)
+
+        peer_socket.send(MemberMessage([(p[1], p[2]) for p in self.participants]).encode())
+
+        while self.running:
             try:
+                peer_socket.settimeout(1)
                 message = peer_socket.recv(BUFFER_SIZE)
+                if not message:
+                    break
                 msg = Message.from_bytes(message)
-                if msg.is_heartbeat():
+                if isinstance(msg, HeartbeatMessage):
                     continue
                 print(message)
+            except socket.timeout:
+                continue
             except:
                 self.participants.remove((peer_socket, peer_socket.getpeername()))
                 self.gui.remove_peer(peer_socket.getpeername()[0])
                 break
-
+        peer_socket.close()
 
 class Participant(Client):
     def __init__(self, name: str, gui: QtWidgets.QWidget) -> None:
         super().__init__(gui)
         self.name = name
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.joined = False
 
     def listen(self):
         multicast_socket = socket.socket(
             socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP
         )
         multicast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        multicast_socket.bind((MCAST_GROUP, MCAST_PORT))
+        multicast_socket.bind(('', MCAST_PORT))
 
         mreq = socket.inet_aton(MCAST_GROUP) + socket.inet_aton("0.0.0.0")
         multicast_socket.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
-        while True:
-            msg = Message.from_bytes(multicast_socket.recv(BUFFER_SIZE))
-            print(msg)
-            if isinstance(msg, AnnounceMessage):
-                self.gui.add_peer(msg.name, msg.port)
+        while self.running:
+            try:
+                multicast_socket.settimeout(1)
+                msg_bytes, address = multicast_socket.recvfrom(BUFFER_SIZE)
+                msg = Message.from_bytes(msg_bytes)
+                print(msg)
+                if isinstance(msg, AnnounceMessage):
+                    self.gui.add_peer(msg.name, address[0], msg.port)
+            except socket.timeout:
+                continue
+
+        multicast_socket.close()
 
     def connect_to_host(self, host_ip: str, host_port: int):
         self.client_socket.connect((host_ip, host_port))
@@ -194,31 +231,49 @@ class Participant(Client):
         self.client_socket.send(join_msg.encode())
 
         def listen_to_host():
-            while True:
+            while self.running:
                 try:
+                    self.client_socket.settimeout(1)
                     message = self.client_socket.recv(BUFFER_SIZE)
+                    if not message:
+                        break
+
+                    decoded = Message.from_bytes(message)
+                    if isinstance(decoded, MemberMessage):
+                        members = decoded.members
+                        self.gui.set_peers(members)
+
                     print(message)
-                except:
-                    print("Connection to host lost.")
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    print("Connection to host lost.", e)
                     self.client_socket.close()
+                    self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     break
 
         listen_thread = threading.Thread(target=listen_to_host)
         listen_thread.start()
 
     def disconnect(self):
+        self.running = False
         self.client_socket.close()
 
+class ListItem(QtWidgets.QListWidgetItem):
+    def __init__(self, name: str, ip: str, port: int):
+        super().__init__(name)
+        self.ip = ip
+        self.port = port
 
 class PeerLobby(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
-
         self.client: Client
-
-        self.peers = {}
+        self.peers: dict[tuple[str, int], str] = {}
         self.lock = threading.Lock()
+        self.discovery_timer = threading.Timer(DISCOVERY_INTERVAL, self.discovery)
+        self.discovery_timer.start()
 
     def initUI(self):
         self.setWindowTitle("Peer-to-Peer Lobby")
@@ -283,30 +338,45 @@ class PeerLobby(QtWidgets.QWidget):
     def refresh_peers(self):
         self.client.refresh()
 
+    def discovery(self):
+        if hasattr(self, 'client') and isinstance(self.client, Participant):
+            self.client.refresh()
+
     def update_peer_list(self):
         self.peer_list_widget.clear()
         with self.lock:
-            for peer_ip, (_, peer_port, _) in self.peers.items():
-                self.peer_list_widget.addItem(f"{peer_ip}:{peer_port}")
+            for (host_ip, host_port), host_name in self.peers.items():
+                self.peer_list_widget.addItem(ListItem(host_name, host_ip, host_port))
 
-    def add_peer(self, peer_ip, peer_port):
+    def set_peers(self, peers: list[tuple]):
+        dict_peers = {(address[0], address[1]): name for name, address in peers}
         with self.lock:
-            self.peers[peer_ip] = (peer_ip, peer_port, time.time())
+            self.peers = dict_peers
         self.update_peer_list()
 
-    def remove_peer(self, peer_ip):
+    def add_peer(self, host_name: str, host_ip: str, host_port: int):
         with self.lock:
-            del self.peers[peer_ip]
+            self.peers[(host_ip, host_port)] = host_name
         self.update_peer_list()
 
-    def list_clicked(self, item):
+    def remove_peer(self, host_ip):
+        with self.lock:
+            for key in list(self.peers.keys()):
+                if key[0] == host_ip:
+                    del self.peers[key]
+        self.update_peer_list()
+
+    def list_clicked(self, item: ListItem):
         if isinstance(self.client, Participant):
-            peer_ip, peer_port = item.text().split(":")
-            if isinstance(self.client, Host):
-                self.client.participants.append((peer_ip, peer_port))
-            else:
-                self.client.connect_to_host(peer_ip, int(peer_port))
+            print(f"Connecting to {item.text()}")
+            self.client.connect_to_host(item.ip, item.port)
 
+    def closeEvent(self, a0):
+        if hasattr(self, 'client') and self.client:
+            self.client.stop()
+        self.discovery_timer.cancel()
+
+        super().closeEvent(a0)
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

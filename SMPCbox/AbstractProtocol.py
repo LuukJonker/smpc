@@ -228,7 +228,7 @@ class AbstractProtocol(ABC):
         self.__call__()
 
         if self.visualiser:
-            self.visualiser.end_protocol()
+            self.visualiser.end_protocol(self.get_party_statistics(), self.get_total_statistics())
 
     @abstractmethod
     def __call__(self):

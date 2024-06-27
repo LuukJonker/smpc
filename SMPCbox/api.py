@@ -58,5 +58,5 @@ class ProtocolSide:
     def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
         self.queue.put((Step.END_SUBROUTINE, (output_values,)))
 
-    def end_protocol(self):
-        self.queue.put((Step.END_PROTOCOL, ()))
+    def end_protocol(self, party_statistics: dict[str, Any], protocol_statistics: Any):
+        self.queue.put((Step.END_PROTOCOL, (party_statistics, protocol_statistics)))

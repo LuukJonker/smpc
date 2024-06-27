@@ -108,7 +108,7 @@ class State(Enum):
 
 
 class Protocolvisualiser(ProtocolSide):
-    def __init__(self):
+    def __init__(self, distributed_name: str):
         self.app = QApplication(sys.argv)
         self.protocols: dict[str, type[AbstractProtocol]] = {}
         self.protocol_name: str = ""
@@ -134,6 +134,8 @@ class Protocolvisualiser(ProtocolSide):
         self.subroutine_stack: list[Subroutine] = []
 
         self.atexit: list[Callable] = []
+
+        self.distributed_name = distributed_name
 
     def set_status(self, status: State):
         string = status.name.replace("_", " ").capitalize()
@@ -164,11 +166,12 @@ class Protocolvisualiser(ProtocolSide):
             return
 
         inputs: list[list[str]] = []
-        for i, expected_vars in enumerate(inp.values()):
-            for i, var in enumerate(expected_vars):
-                if i >= len(inputs):
-                    inputs.append([])
-                inputs[i].append(var)
+        for party_index, expected_vars in enumerate(inp.values()):
+            for var_index, var in enumerate(expected_vars):
+                if len(inputs) <= var_index:
+                    inputs.append([""] * len(self.parties))
+                if not self.distributed_name or self.distributed_name == self.party_names[party_index]:
+                    inputs[var_index][party_index] = var
 
         max_len = max(len(i) for i in inputs)
         for i in inputs:
@@ -216,6 +219,12 @@ class Protocolvisualiser(ProtocolSide):
                     input_dict[party] = {}
 
                 input_dict[party][prompt] = result
+
+        print(input_dict, self.distributed_name)
+
+        # if self.distributed_name:
+        #     self.protocol.set_party_addresses(
+
 
         self.protocol.set_input(input_dict)
 
@@ -316,7 +325,7 @@ class Protocolvisualiser(ProtocolSide):
         elif step_type == Step.END_SUBROUTINE:
             self.end_subroutine(*args)
         elif step_type == Step.END_PROTOCOL:
-            self.end_protocol()
+            self.end_protocol(*args)
         else:
             raise ValueError(f"Unknown step type: {step_type}")
 
@@ -427,7 +436,8 @@ class Protocolvisualiser(ProtocolSide):
         else:
             self.gui.add_end_subroutine_step(output_values)
 
-    def end_protocol(self):
+    def end_protocol(self, party_statistics: dict[str, Any], protocol_statistics: Any):
+        self.gui.add_statistics(party_statistics, protocol_statistics)
         self.set_status(State.FINISHED)
         self.gui.set_finished()
 
@@ -436,11 +446,16 @@ class Protocolvisualiser(ProtocolSide):
         signature = inspect.signature(func)
         params = {}
         for name, param in signature.parameters.items():
+            param_type = param.annotation
+            if param.annotation == inspect.Parameter.empty:
+                if param.default == inspect.Parameter.empty:
+                    param_type = int
+                else:
+                    param_type = type(param.default)
+
             param_info = {
                 "type": (
-                    param.annotation
-                    if param.annotation != inspect.Parameter.empty
-                    else None
+                    param_type
                 ),
                 "default": (
                     param.default

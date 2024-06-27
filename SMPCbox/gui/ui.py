@@ -14,6 +14,8 @@ from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QCursor
 from typing import Any, Callable
 from SMPCbox.constants import NoDefault
+from SMPCbox.ProtocolParty import TrackedStatistics
+from .statistics import StatisticsWidget
 
 from .comment import CommentWidget
 from .input import InputWidget, Input
@@ -367,6 +369,16 @@ class MainWindow(QMainWindow):
             raise ValueError(
                 "The indexes of the parties are not the same with a call to end_subroutine."
             )
+
+    def add_statistics(self, party_statistics: dict[str, TrackedStatistics], total_statistics: TrackedStatistics):
+        widget = StatisticsWidget(party_statistics, total_statistics)
+        print("Here", party_statistics)
+        list_item = QListWidgetItem(self.list_widget)
+        list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
+        self.list_widget.setItemWidget(list_item, widget)
+
+        self.update_all_indexes()
+
 
     def get_party_index(self, party_name: str):
         return list(self.party_indexes.keys()).index(party_name)
