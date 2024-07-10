@@ -54,6 +54,14 @@ Now that the virtual environment is activated, you can install the dependencies 
 pip install -r requirements.txt
 ```
 
+### Install the SMPCbox package
+
+To install the SMPCbox package, run the following command:
+
+```bash
+python3 setup.py install
+```
+
 ### Run the application
 
 To run the gui, execute the following command from the root directory of the project:

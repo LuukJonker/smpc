@@ -8,3 +8,4 @@ PyQt5-Qt5==5.15.2
 PyQt5-sip==12.13.0
 watchdog==4.0.0
 SMPCbox==1.0.1
+setuptools==65.5.0

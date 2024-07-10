@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING, Union
-import socket 
+import socket
 import threading
 import json
 import select
@@ -60,7 +60,7 @@ class SMPCSocket ():
         self.client_sockets: dict[socket.socket, str | None] = {}
         self.listening_socket = None
         self.listening_thread = None
-    
+
     def set_address(self, address: str):
         """
         Sets the address the party of this socket listens on.
@@ -70,13 +70,13 @@ class SMPCSocket ():
         self.ip, self.port = parse_address(address)
 
     def decode_received_msg(self, msg:str, sock: socket.socket):
-        """ 
+        """
         decodes a message received from a client socket
         The message can be either variables or the initial msg that specifies who this client is
         by sending their listening ip and port.
         """
-        
-        
+
+
         msg_type, msg_length, rest = msg.split('$', maxsplit=2)
         msg_length = int(msg_length)
         msg_content = rest[:msg_length]
@@ -94,35 +94,35 @@ class SMPCSocket ():
                     value = json.loads(variables[i+1])
                     var_names.append(var_name)
                     values.append(value)
-                
+
                 sender_addr = self.client_sockets[sock]
                 if sender_addr == None:
                     raise Exception("Received variables from unknown client socket")
                 self.put_variables_in_buffer(sender_addr, var_names, values)
-            
+
             case MessageType.ANNOUNCE_NAME:
                 ip, port = parse_address(msg_content)
                 self.client_sockets[sock] = stringify_address(ip,port)
             case _:
                 raise Exception(f"Received message starting with unknown message type {msg_type}")
-        
+
         if additional_data:
             # the data contained another message
             self.decode_received_msg(additional_data, sock)
-    
+
     def start_listening(self):
         """
         Starts the listening thread of this socket.
         """
         # create the listening socket which will accept incomming connections and also read messages
         self.listening_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listening_socket.bind((self.ip, self.port))
         # TODO remove magic number for backlog in listen
         self.listening_socket.listen(5)
         self.listening_thread = threading.Thread(target=self.listen)
         self.listening_thread.start()
-                
+
     def listen(self):
         if self.listening_socket is None:
             # listen only gets called from the start_listening method which inits the listening socket
@@ -146,25 +146,25 @@ class SMPCSocket ():
                     else:
                         pass
                         # The client has closed their side of the socket
-       
+
         # close all the connections
         if not self.simulated and self.listening_socket:
             for connection in self.client_sockets.keys():
                 connection.close()
 
         self.listening_socket.close()
-    
+
     def get_address(self) -> tuple[str, int]:
         if self.ip == None or self.port == None:
             return "", 0
-        
+
         return self.ip, self.port
-    
+
     def connect_to_client(self, ip: str, port: int, timeout: float = 10):
         new_client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         start = time.time()
         while timeout == None or (time.time() - start) < timeout:
-            try: 
+            try:
                 new_client.connect((ip, port))
                 self.client_sockets[new_client] = stringify_address(ip, port)
 
@@ -176,26 +176,26 @@ class SMPCSocket ():
             except (socket.timeout, ConnectionRefusedError):
                 time.sleep(0.25)
                 continue
-        
+
         # connection was unsucessfull
         raise UnableToConnect(ip, port)
-                
-        
-    
+
+
+
     def connect_to_parties(self, other_parties: list[ProtocolParty], timeout=60):
         """
         Establishes a connection with all the provided SMPCSocket
         """
         if self.simulated:
             return
-        
+
         # if we aren't simulated establish the connections
         for party in other_parties:
             ip, port = party.socket.get_address()
             if stringify_address(ip, port) not in self.client_sockets:
                 self.connect_to_client(ip, port, timeout=timeout)
-            
-    
+
+
     """
     Closes the socket,
     Note that this doesn't allow the imediate reuse of the port. Since
@@ -206,19 +206,19 @@ class SMPCSocket ():
         # wait on the listening thread to clean everything up
         if self.listening_thread is not None:
             self.listening_thread.join()
-        
+
 
     def put_variables_in_buffer (self, sender: str | SMPCSocket, variable_names: list[str], values: list[Any]):
         if not sender in self.received_variables.keys():
             self.received_variables[sender] = {}
-        
+
         # add all the provided variables
         for var, val in zip(variable_names, values):
             if var in self.received_variables[sender]:
                 self.received_variables[sender][var].append(val)
             else:
                 self.received_variables[sender][var] = [val]
-    
+
     """
     Stores a received_variables in the buffer
     """
@@ -226,15 +226,15 @@ class SMPCSocket ():
         # check if this variable has been received from the specified sender
         if not (sender in self.received_variables.keys() and variable_name in self.received_variables[sender].keys()):
             return NotReceived()
-        
+
         # get the value for the variable that arived first
         value = self.received_variables[sender][variable_name].pop(0)
 
         if len(self.received_variables[sender][variable_name]) == 0:
             del self.received_variables[sender][variable_name]
-            
+
         return value
-    
+
 
     """
     This function returns the variable received from the sender with the specified variable name.
@@ -253,29 +253,29 @@ class SMPCSocket ():
                 value = self.get_variable_from_buffer(sender_addr, variable_name)
                 if not isinstance(value, NotReceived):
                     return value
-                
+
                 if self.ip == None:
                     # no need to wait for network delay since were simulating it all
                     break
                 time.sleep(0.1)
-            
+
             return NotReceived()
 
     """
-    This function sends the variable to this socket. 
+    This function sends the variable to this socket.
     """
     def send_variables (self, receiver: 'ProtocolParty', variable_names: list[str], values: list[Any]):
         receiver_socket: 'SMPCSocket' = receiver.socket
         if self.simulated:
               # we simulate the socket by putting the variable in the buffer of received variables
             receiver_socket.put_variables_in_buffer(self, variable_names, values)
-        else: 
+        else:
             # check for an existing connection
             addr = stringify_address(*receiver_socket.get_address())
 
             if addr not in self.client_sockets.values():
                 raise Exception(f"Client with listening address {addr} not connected")
-            
+
             msg = ""
             # Add all the variables
             for var, val in zip(variable_names, values):
@@ -286,6 +286,6 @@ class SMPCSocket ():
             if socket == None:
                 # we have just checked that the addr exists so we know there will be a socket
                 raise Exception()
-            
+
             socket.sendall(msg.encode())
-          
+
