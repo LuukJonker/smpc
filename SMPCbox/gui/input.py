@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QVBoxLayout,
 )
+from typing import Any
 
 
 class Input(QWidget):
@@ -56,6 +57,9 @@ class Input(QWidget):
     def on_change(self, callback):
         self.input.textChanged.connect(callback)
 
+    def set_immutable(self):
+        self.input.setReadOnly(True)
+
     def display_error(self, error: str):
         if error:
             self.error_label.setText(error)
@@ -77,7 +81,7 @@ class Input(QWidget):
 
 
 class InputWidget(QWidget):
-    def __init__(self, inputs: list[str]):
+    def __init__(self, inputs: list[str], defaults: list[Any] | None, mutable: bool = True):
         super().__init__()
 
         layout = QGridLayout()
@@ -87,6 +91,12 @@ class InputWidget(QWidget):
 
         self.inputs = [(Input(input) if input else Input("")) for input in inputs]
         for i, input in enumerate(self.inputs):
+            if not mutable:
+                input.set_immutable()
+
+            if defaults and defaults[i] is not None:
+                input.set_input(str(defaults[i]))
+
             layout.addWidget(input, 0, i)
 
         self.setLayout(layout)

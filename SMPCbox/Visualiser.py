@@ -5,12 +5,13 @@ from PyQt5.QtCore import QTimer
 import sys
 from SMPCbox.AbstractProtocol import AbstractProtocol
 from SMPCbox.ProtocolParty import ProtocolParty
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 from enum import Enum
 import inspect
-from SMPCbox.api import Step, ProtocolSide
+from SMPCbox.CommunicationLayer import Step, ProtocolSide
 import signal
-from .constants import TIMER_INTERVAL, NoDefault
+from .constants import TIMER_INTERVAL, NoDefault, QUEUE_SIZE
+from SMPCbox.Lobby import PeerLobby, Host, Peer
 
 
 class Input:
@@ -71,6 +72,21 @@ class Subroutine:
         self.gui = ui.SubroutineWindow(self.name, parties, self.on_close)
         self.gui.show()
 
+        inputs: list[list[str]] = []
+        defaults: list[list[Any]] = []
+        for party_index, expected_vars in enumerate(self.input_mapping.values()):
+            for var_index, (var, value) in enumerate(expected_vars.items()):
+                if len(inputs) <= var_index:
+                    inputs.append([""] * len(self.party_mapping))
+                if len(defaults) <= var_index:
+                    defaults.append([None] * len(self.party_mapping))
+
+                inputs[var_index][party_index] = var
+                defaults[var_index][party_index] = value
+
+        for default, inp in zip(defaults, inputs):
+            self.gui.add_input_step(inp, default, mutable=False)
+
         for step in self.steps:
             self.handle_step(step)
 
@@ -107,25 +123,29 @@ class State(Enum):
     FINISHED = 4
 
 
-class Protocolvisualiser(ProtocolSide):
-    def __init__(self, distributed_name: str):
+class ProtocolVisualizer(ProtocolSide):
+    def __init__(self, distributed = False):
         self.app = QApplication(sys.argv)
         self.protocols: dict[str, type[AbstractProtocol]] = {}
         self.protocol_name: str = ""
         self.protocol: AbstractProtocol | None = None
         self.party_names: list[str] = []
-        self.gui = ui.MainWindow(
-            self.party_names, self.one_step, self.run, self.reset, self.on_close
-        )
-        self.gui.protocol_chooser.currentIndexChanged.connect(self.protocol_changed)
+        self.gui: ui.MainWindow | ui.ParticipantWindow
+        if not distributed:
+            self.gui = ui.MainWindow(self.party_names, self.one_step, self.run, self.reset, self.on_close)
+            self.gui.protocol_chooser.currentIndexChanged.connect(self.protocol_changed)
+
         self.parties: dict[str, ProtocolParty] = {
             party: ProtocolParty(party) for party in self.party_names
         }
 
+        self.state: State = State.NOT_STARTED
+
+        self.protocol_index: int | None = None
+        self.is_protocols_being_set = Event()
+
         self.running_protocol: Process | None = None
         self.queue: Queue
-
-        self.set_status(State.NOT_STARTED)
 
         self.one_step_timer: QTimer | None = None
         self.running_timer: QTimer | None = None
@@ -135,7 +155,7 @@ class Protocolvisualiser(ProtocolSide):
 
         self.atexit: list[Callable] = []
 
-        self.distributed_name = distributed_name
+        self.distributed_setup: tuple[dict[str, str], str] | None = None
 
     def set_status(self, status: State):
         string = status.name.replace("_", " ").capitalize()
@@ -151,7 +171,7 @@ class Protocolvisualiser(ProtocolSide):
 
         self.gui.list_widget.clear()
 
-    def setup_input(self):
+    def setup_input(self, distributed_name: str | None = None):
         if self.protocol is None:
             return
 
@@ -160,17 +180,20 @@ class Protocolvisualiser(ProtocolSide):
         self.gui.update_party_names(self.party_names)
         inp = self.protocol.input_variables()
 
-        self.inputs = []
-
         if len(inp) == 0:
             return
+
+        self.inputs = []
 
         inputs: list[list[str]] = []
         for party_index, expected_vars in enumerate(inp.values()):
             for var_index, var in enumerate(expected_vars):
                 if len(inputs) <= var_index:
                     inputs.append([""] * len(self.parties))
-                if not self.distributed_name or self.distributed_name == self.party_names[party_index]:
+                if (
+                    not distributed_name
+                    or distributed_name == self.party_names[party_index]
+                ):
                     inputs[var_index][party_index] = var
 
         max_len = max(len(i) for i in inputs)
@@ -182,7 +205,7 @@ class Protocolvisualiser(ProtocolSide):
             self.add_input(i, [int for _ in i])
 
     @staticmethod
-    def run_protocol(protocol: AbstractProtocol, queue: Queue):
+    def run_protocol(protocol: AbstractProtocol, queue: Queue, distributed_setup: tuple[dict[str, str], str] | None = None):
         """Starts a protocol and adds the visualizer. Is supposed to be run in a separate process.
 
         Args:
@@ -196,6 +219,9 @@ class Protocolvisualiser(ProtocolSide):
             raise SystemExit
 
         signal.signal(signal.SIGTERM, signal_handler)
+
+        if distributed_setup:
+            protocol.set_party_addresses(*distributed_setup)
 
         protocol.run()
 
@@ -220,22 +246,17 @@ class Protocolvisualiser(ProtocolSide):
 
                 input_dict[party][prompt] = result
 
-        print(input_dict, self.distributed_name)
-
-        # if self.distributed_name:
-        #     self.protocol.set_party_addresses(
-
-
         self.protocol.set_input(input_dict)
 
-        self.queue = Queue()
+        self.queue = Queue(QUEUE_SIZE)
 
         self.running_protocol = Process(
-            target=self.run_protocol, args=(self.protocol, self.queue)
+            target=self.run_protocol, args=(self.protocol, self.queue, self.distributed_setup)
         )
         self.running_protocol.start()
 
     def run_gui(self):
+        self.set_status(State.NOT_STARTED)
         self.gui.show()
         sys.exit(self.app.exec_())
 
@@ -306,7 +327,8 @@ class Protocolvisualiser(ProtocolSide):
             self.running_timer.stop()
             self.running_timer = None
 
-        self.gui.set_paused()
+        if not self.distributed_setup:
+            self.gui.set_paused()
         self.setup_protocol()
         self.setup_input()
 
@@ -414,7 +436,9 @@ class Protocolvisualiser(ProtocolSide):
             else:
                 clients.append("")
 
-        subroutine_object = Subroutine(subroutine_name, party_mapping, input_mapping, output_mapping)
+        subroutine_object = Subroutine(
+            subroutine_name, party_mapping, input_mapping, output_mapping
+        )
 
         if self.subroutine_stack:
             self.subroutine_stack[-1].add_step(
@@ -424,9 +448,7 @@ class Protocolvisualiser(ProtocolSide):
         else:
             self.gui.add_subroutine_step(subroutine_name, clients, subroutine_object)
 
-        self.subroutine_stack.append(
-            subroutine_object
-        )
+        self.subroutine_stack.append(subroutine_object)
 
     def end_subroutine(self, output_values: dict[str, dict[str, Any]]):
         self.subroutine_stack.pop()
@@ -454,9 +476,7 @@ class Protocolvisualiser(ProtocolSide):
                     param_type = type(param.default)
 
             param_info = {
-                "type": (
-                    param_type
-                ),
+                "type": (param_type),
                 "default": (
                     param.default
                     if param.default != inspect.Parameter.empty
@@ -484,27 +504,26 @@ class Protocolvisualiser(ProtocolSide):
                     protocol_class, kwargs
                 ),
             )
-            self.reset()
         else:
             self.gui.protocol_input_list.clear()
             self.protocol = protocol_class()
-            self.reset()
+
+        self.reset()
 
     def set_protocols(self, protocols: dict[str, type[AbstractProtocol]]):
         self.protocols = protocols
+        self.is_protocols_being_set.set()
         self.gui.protocol_chooser.clear()
         self.gui.protocol_chooser.addItems(list(protocols.keys()))
-
-        # if self.protocol_name:
-        #     self.gui.protocol_chooser.setCurrentText(self.protocol_name)
-        #     self.choose_protocol(self.protocols[self.protocol_name])
-        # else:
-        #     self.choose_protocol(
-        #         list(protocols.values())[self.gui.protocol_chooser.currentIndex()]
-        #     )
+        self.gui.protocol_chooser.setCurrentIndex(self.protocol_index or 0)
 
     def protocol_changed(self, index: int):
-        self.choose_protocol(list(self.protocols.values())[index])
+        if self.is_protocols_being_set.is_set():
+            self.choose_protocol(list(self.protocols.values())[self.protocol_index or 0])
+            self.is_protocols_being_set.clear()
+        else:
+            self.protocol_index = index
+            self.choose_protocol(list(self.protocols.values())[index])
 
     def on_close(self):
         if self.running_protocol:
@@ -515,3 +534,116 @@ class Protocolvisualiser(ProtocolSide):
 
     def add_atexit(self, func: Callable):
         self.atexit.append(func)
+
+
+class DistributedVisualizer(ProtocolVisualizer):
+    def __init__(self):
+        super().__init__(True)
+
+        self.gui = ui.ParticipantWindow("", [], self.on_ready, self.on_close)
+
+        self.role = None
+        self.lobby_gui = PeerLobby(self.on_role_selection, self.on_host_start, self.setup_distributed_protocol)
+        self.lobby_gui.setup_signal.connect(self.setup_distributed_gui)
+        self.lobby_gui.start_signal.connect(self.run)
+
+        self.host_configuration_gui: ui.HostWindow | None = None
+        self.configuration: dict[str, Any] = {}
+
+        self.addresses_setup: tuple[dict[str, str], str] | None = None
+
+    def run_gui(self):
+        print("Running distributed visualizer")
+        self.lobby_gui.show()
+        sys.exit(self.app.exec_())
+
+    def on_host_start(self):
+        participants = list(self.lobby_gui.peers.values())
+        participants.append(self.lobby_gui.get_host())
+        self.host_configuration_gui = ui.HostWindow(participants, self.on_configured, self.on_host_window_close)
+
+        self.host_configuration_gui.protocol_chooser.clear()
+        self.host_configuration_gui.protocol_chooser.addItems(list(self.protocols.keys()))
+        self.host_configuration_gui.protocol_chooser.currentIndexChanged.connect(self.protocol_changed)
+
+        self.protocol_changed(0)
+
+        self.host_configuration_gui.show()
+
+    def on_configured(self, mapping: dict[str, Peer]):
+        if not isinstance(self.lobby_gui.client, Host):
+            raise ValueError("Only the host can configure the protocol.")
+
+        if not self.host_configuration_gui:
+            return
+
+        protocol_name = self.host_configuration_gui.protocol_chooser.currentText()
+        self.lobby_gui.client.send_configuration(protocol_name, self.configuration, mapping)
+
+
+    def on_host_window_close(self):
+        self.host_configuration_gui = None
+
+    def on_role_selection(self, role: str):
+        self.role = role
+
+    def set_protocols(self, protocols: dict[str, type[AbstractProtocol]]):
+        self.protocols = protocols
+
+        if self.host_configuration_gui:
+            self.host_configuration_gui.protocol_chooser.clear()
+            self.host_configuration_gui.protocol_chooser.addItems(list(protocols.keys()))
+
+    def on_ready(self):
+        self.lobby_gui.client.send_ready()
+
+    def reset(self):
+        if self.host_configuration_gui:
+            if self.protocol:
+                self.host_configuration_gui.update_parties(self.protocol.party_names())
+            else:
+                self.host_configuration_gui.update_parties([])
+
+
+    def choose_protocol(self, protocol_class: type["AbstractProtocol"]):
+        if not self.host_configuration_gui:
+            return
+
+        params = self.get_function_params(protocol_class.__init__)
+        del params["self"]
+
+        def on_start(kwargs: dict[str, Any]):
+            self.configuration = kwargs
+            self.start_protocol_with_arguments(protocol_class, kwargs)
+
+        if params:
+            self.protocol = None
+            self.host_configuration_gui.update_parties([])
+            self.host_configuration_gui.get_starting_values(
+                params,
+                on_start,
+            )
+        else:
+            self.host_configuration_gui.protocol_input_list.clear()
+            self.protocol = protocol_class()
+            self.configuration = {}
+
+        self.reset()
+
+    def setup_distributed_protocol(self, protocol_name: str, party_name: str, addresses: dict[str, str], configuration: dict[str, Any]):
+        self.protocol = self.protocols[protocol_name](**configuration)
+
+        self.distributed_setup = (addresses, party_name)
+
+        self.protocol_name = protocol_name
+        self.lobby_gui.setup_signal.emit(party_name)
+
+    def setup_distributed_gui(self, party_name: str):
+        self.gui.set_protocol_name(self.protocol_name)
+
+        self.gui.show()
+
+        self.setup_input(party_name)
+
+    def start_distributed_protocol(self):
+        self.run()

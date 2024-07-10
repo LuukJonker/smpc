@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Callable, Any, TYPE_CHECKING
 from SMPCbox.ProtocolParty import ProtocolParty, TrackedStatistics
 from SMPCbox.exceptions import NonExistentParty, InvalidProtocolInput, InvalidVariableName
-from SMPCbox.api import ProtocolSide
+from SMPCbox.CommunicationLayer import ProtocolSide
 from functools import wraps
 
 if TYPE_CHECKING:
@@ -216,9 +216,13 @@ class AbstractProtocol(ABC):
                     # The variable is posibly not received yet.
                     variable_values[var] = None
 
-        if not self.broadcasting and self.visualiser:
+        if not self.broadcasting and self.visualiser and (sending_party.is_local() or receiving_party.is_local()):
             sending_party_name = self.get_name_of_party(sending_party)
             receiving_party_name = self.get_name_of_party(receiving_party)
+
+            if receiving_party.is_local():
+                for var in variables:
+                    variable_values[var] = receiving_party.get_variable(var)
 
             self.visualiser.send_message(
                 sending_party_name, receiving_party_name, variable_values
@@ -347,14 +351,6 @@ class AbstractProtocol(ABC):
 
         protocol.set_protocol_parties(role_assignments)
 
-        if self.visualiser:
-            self.visualiser.start_subroutine(
-                protocol.protocol_name,
-                {party.name: role for role, party in role_assignments.items()},
-                inputs,
-                output_vars,
-            )
-
         # before calling start_subroutine_protocol on the parties
         # we first gather the provided variables from the parties to avoid namespace issues.
         input_values = {}
@@ -382,6 +378,14 @@ class AbstractProtocol(ABC):
                     input_var_mapping[party_name][input_var_name] = provided_var
 
             party = role_assignments[party_name]
+
+        if self.visualiser:
+            self.visualiser.start_subroutine(
+                protocol.protocol_name,
+                {party.name: role for role, party in role_assignments.items()},
+                input_values,
+                output_vars,
+            )
 
         # comunicate to the participating parties that they are entering a subroutine
         for party in role_assignments.values():

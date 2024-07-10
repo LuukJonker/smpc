@@ -29,7 +29,7 @@ def getRSAvars():
 
 
 class OT(AbstractProtocol):
-    protocol_name="Oblivi"
+    protocol_name="ObliviousTransfer"
 
     def __init__(self):
         super().__init__()

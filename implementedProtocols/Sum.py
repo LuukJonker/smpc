@@ -45,6 +45,8 @@ class Sum(AbstractProtocol):
         self.send_variables(self.parties[self.party_names()[-1]], self.parties["party_0"], "accum")
         self.compute(party_0, "sum", lambda: party_0["accum"] - party_0["r"], "accum - r")
 
+        print("SUM:", party_0["sum"])
+
 if __name__ == "__main__":
     protocol = Sum(5)
     input = {}

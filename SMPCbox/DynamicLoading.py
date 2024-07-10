@@ -107,7 +107,7 @@ class ClassWatcher:
         classes: list[tuple[str, type[AbstractProtocol]]] = []
         for module_name, module in self.module_cache.items():
             for name, obj in inspect.getmembers(module.module, inspect.isclass):
-                if obj.__module__ == module_name:
+                if obj.__module__ == module_name and issubclass(obj, AbstractProtocol):
                     classes.append((name, obj))  # type: ignore
         return classes
 
@@ -197,7 +197,13 @@ class FileChangeHandler(FileSystemEventHandler):
             return
         module = importlib.util.module_from_spec(spec)
         sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as e:
+            if self.verbose:
+                print(f"Failed to load module: {module_name}")
+                print(e)
+            return
         self.module_cache[module_name] = ModuleInfo(module, change_type)
 
         if self.verbose:
@@ -215,7 +221,13 @@ class FileChangeHandler(FileSystemEventHandler):
         module_name = self._get_module_name(filepath)
         self._add_to_sys_path(filepath)
         if module_name in self.module_cache:
-            importlib.reload(self.module_cache[module_name].module)
+            try:
+                importlib.reload(self.module_cache[module_name].module)
+            except Exception as e:
+                if self.verbose:
+                    print(f"Failed to reload module: {module_name}")
+                    print(e)
+                return
             self.module_cache[module_name].change_type = ChangeType.MODIFIED
             self.module_cache[module_name].changed = True
 

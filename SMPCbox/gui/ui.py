@@ -9,12 +9,14 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QListWidgetItem,
     QComboBox,
+    QHBoxLayout
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QCursor
 from typing import Any, Callable
 from SMPCbox.constants import NoDefault
 from SMPCbox.ProtocolParty import TrackedStatistics
+from SMPCbox.Lobby import Peer
 from .statistics import StatisticsWidget
 
 from .comment import CommentWidget
@@ -276,8 +278,10 @@ class MainWindow(QMainWindow):
 
         return widget
 
-    def add_input_step(self, prompts: list[str]) -> InputWidget:
-        widget = InputWidget(prompts)
+    def add_input_step(
+        self, prompts: list[str], defaults: list[Any] | None = None, mutable=True
+    ) -> InputWidget:
+        widget = InputWidget(prompts, defaults, mutable)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
@@ -338,7 +342,9 @@ class MainWindow(QMainWindow):
 
         return widget
 
-    def add_subroutine_step(self, subroutine_name: str, clients: list[str], subroutine_object: object):
+    def add_subroutine_step(
+        self, subroutine_name: str, clients: list[str], subroutine_object: object
+    ):
         widget = SubroutineWidget(subroutine_name, clients, subroutine_object)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
@@ -370,15 +376,17 @@ class MainWindow(QMainWindow):
                 "The indexes of the parties are not the same with a call to end_subroutine."
             )
 
-    def add_statistics(self, party_statistics: dict[str, TrackedStatistics], total_statistics: TrackedStatistics):
+    def add_statistics(
+        self,
+        party_statistics: dict[str, TrackedStatistics],
+        total_statistics: TrackedStatistics,
+    ):
         widget = StatisticsWidget(party_statistics, total_statistics)
-        print("Here", party_statistics)
         list_item = QListWidgetItem(self.list_widget)
         list_item.setSizeHint(widget.sizeHint() + QSize(0, 20))
         self.list_widget.setItemWidget(list_item, widget)
 
         self.update_all_indexes()
-
 
     def get_party_index(self, party_name: str):
         return list(self.party_indexes.keys()).index(party_name)
@@ -387,6 +395,96 @@ class MainWindow(QMainWindow):
         highest_index = max(self.party_indexes.values())
         for party in self.party_indexes:
             self.party_indexes[party] = highest_index + 1
+
+
+class PartyParticipantMapper(QWidget):
+
+    def __init__(self, participants: list[Peer]):
+        super().__init__()
+        self.parties = []
+        self.participants = participants
+        self.mapping: dict[str, Peer] = {}
+        self.comboboxes = {}
+        self.list_widget = QListWidget()
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        layout.addWidget(self.list_widget)
+        self.setLayout(layout)
+
+    def update_parties(self, parties: list[str]):
+        self.parties = parties
+        self.list_widget.clear()
+        self.comboboxes.clear()
+        self.mapping.clear()
+
+        for party in self.parties:
+            item = QListWidgetItem(self.list_widget)
+            widget = QWidget()
+            layout = QHBoxLayout(widget)
+            layout.addWidget(QLabel(party))
+
+            combobox = QComboBox()
+            combobox.addItems([p.name for p in self.participants])
+            combobox.currentIndexChanged.connect(lambda index, p=party: self.on_selection_change(p, index))
+
+            layout.addWidget(combobox)
+            item.setSizeHint(widget.sizeHint())
+            self.list_widget.addItem(item)
+            self.list_widget.setItemWidget(item, widget)
+            self.comboboxes[party] = combobox
+            self.mapping[party] = self.participants[0]
+
+    def on_selection_change(self, party, participant_index: int):
+        participant = self.participants[participant_index]
+
+        self.mapping[party] = participant
+
+    def get_mapping(self):
+        return self.mapping
+
+
+class HostWindow(MainWindow):
+    def __init__(self, participants: list[Peer], on_configured, on_close):
+        super().__init__([], lambda: None, lambda: None, lambda: None, on_close)
+        self.participants = participants
+        self.on_configured = on_configured
+        self.initHostUI()
+
+    def initHostUI(self):
+        self.setWindowTitle("SMPC Visualiser Host")
+
+        self.map = PartyParticipantMapper(self.participants)
+
+        main_view = QWidget()
+        main_layout = QVBoxLayout(main_view)
+        main_layout.addWidget(self.protocol_chooser)
+        main_layout.addWidget(self.protocol_input_list)
+        main_layout.addWidget(self.client_frame)
+        main_layout.addWidget(self.map)
+
+        self.run_button.setText("Configure")
+        self.run_button.clicked.connect(self.on_configure)
+        main_layout.addWidget(self.run_button)
+
+        self.setCentralWidget(main_view)
+
+    def update_parties(self, parties):
+        self.map.update_parties(parties)
+
+    def on_configure(self):
+        mapping = self.map.get_mapping()
+        print(mapping)
+
+        if len(mapping) == len(self.participants):
+            self.on_configured(mapping)
+        else:
+            print("Error: All parties must have exactly one participant assigned.")
+
+    def closeEvent(self, a0):
+        super().closeEvent(a0)
+        self.on_close()
 
 class SubroutineWindow(MainWindow):
     def __init__(
@@ -405,3 +503,26 @@ class SubroutineWindow(MainWindow):
         self.one_step_button.hide()
         self.run_button.hide()
         self.reset_button.hide()
+
+
+class ParticipantWindow(MainWindow):
+    def __init__(
+        self,
+        name: str,
+        parties: list[str],
+        on_ready: Callable,
+        on_close: Callable,
+    ):
+        super().__init__(parties, lambda: None, on_ready, lambda: None, on_close)
+
+        self.setWindowTitle(f"SMPC Visualiser - {name}")
+
+        self.protocol_chooser.hide()
+        self.protocol_input_list.hide()
+        self.status_label.hide()
+        self.one_step_button.hide()
+        self.reset_button.hide()
+
+        self.run_button.setText("Ready")
+
+        self.on_ready = on_ready
